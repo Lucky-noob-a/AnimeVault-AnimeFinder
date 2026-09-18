@@ -1,0 +1,6 @@
+{
+  "name": "AnimeVault",
+  "description": "Multi-source anime search and information engine with verified cross-checking and AMOLED interface",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

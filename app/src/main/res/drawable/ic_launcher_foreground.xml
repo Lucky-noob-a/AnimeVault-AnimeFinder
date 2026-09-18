@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Vault Outer Prism Crest -->
+    <path
+        android:fillColor="#FF2A5F"
+        android:pathData="M54,26 L78,40 L78,68 L54,82 L30,68 L30,40 Z" />
+    <!-- Inner Dark Core -->
+    <path
+        android:fillColor="#0E0E11"
+        android:pathData="M54,32 L72,42.5 L72,65.5 L54,76 L36,65.5 L36,42.5 Z" />
+    <!-- Anime Vault Stylized 'V' and Spark in Crisp White and Accent -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,44 L50,44 L54,60 L58,44 L64,44 L57,66 L51,66 Z" />
+    <!-- Central Sparkle Diamond -->
+    <path
+        android:fillColor="#FF5C8A"
+        android:pathData="M54,37 L56,41 L60,43 L56,45 L54,49 L52,45 L48,43 L52,41 Z" />
+</vector>
