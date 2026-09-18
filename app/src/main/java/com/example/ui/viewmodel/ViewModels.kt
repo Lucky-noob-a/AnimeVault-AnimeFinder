@@ -307,7 +307,7 @@ data class SourceHealth(
 data class AccountSyncState(
     val isLoggedIn: Boolean = false,
     val loggedInEmail: String? = null,
-    val emailInput: String = "agrawallucky31@gmail.com",
+    val emailInput: String = "",
     val isSyncing: Boolean = false,
     val lastSyncEpoch: Long? = null,
     val databaseStats: DatabaseStats? = null,
@@ -404,6 +404,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             _accountSyncState.value = _accountSyncState.value.copy(
                 isLoggedIn = false,
                 loggedInEmail = null,
+                emailInput = "",
                 lastSyncEpoch = null,
                 databaseStats = stats,
                 cloudFavoritesCount = 0,

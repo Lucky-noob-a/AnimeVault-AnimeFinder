@@ -560,7 +560,7 @@ fun AccountCloudSyncCard(
                 onValueChange = onEmailChange,
                 singleLine = true,
                 label = { Text("Email Address", color = TextSecondary, fontSize = 12.sp) },
-                placeholder = { Text("agrawallucky31@gmail.com", color = TextTertiary, fontSize = 12.sp) },
+                placeholder = { Text("name@domain.com", color = TextTertiary, fontSize = 12.sp) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Email,
@@ -581,33 +581,6 @@ fun AccountCloudSyncCard(
                     .fillMaxWidth()
                     .testTag("mail_login_input")
             )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Quick suggestion chip
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(AmoledBlack)
-                    .border(1.dp, AmoledBorder, RoundedCornerShape(16.dp))
-                    .clickable { onEmailChange("agrawallucky31@gmail.com") }
-                    .padding(horizontal = 10.dp, vertical = 5.dp)
-                    .testTag("quick_fill_email_chip")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Email,
-                    contentDescription = null,
-                    tint = TextTertiary,
-                    modifier = Modifier.size(12.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Quick Fill: agrawallucky31@gmail.com",
-                    color = TextSecondary,
-                    fontSize = 11.sp
-                )
-            }
 
             Spacer(modifier = Modifier.height(14.dp))
 

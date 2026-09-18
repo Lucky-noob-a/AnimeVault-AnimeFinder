@@ -1,0 +1,75 @@
+name: Build & Publish Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Publish Android Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run Robolectric Unit Tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+
+      - name: Build Debug/Release APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Prepare APK Artifact
+        run: |
+          mkdir -p release-artifacts
+          TAG_NAME="${GITHUB_REF_NAME:-v1.0.0}"
+          cp app/build/outputs/apk/debug/app-debug.apk release-artifacts/AnimeVault-${TAG_NAME}.apk
+          echo "Built artifact: release-artifacts/AnimeVault-${TAG_NAME}.apk"
+
+      - name: Upload APK as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeVault-APK
+          path: release-artifacts/*.apk
+          retention-days: 14
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/*.apk
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          name: "AnimeVault ${{ github.ref_name }}"
+          body: |
+            ## AnimeVault ${{ github.ref_name }} ⚡
+            
+            Welcome to the official release of **AnimeVault**!
+            
+            ### 📥 Download
+            Download the attached `AnimeVault-${{ github.ref_name }}.apk` below and install it directly on your Android device (Android 8.0+ / API 24+).
+            
+            ### ✨ Highlights
+            - **Multi-Source Intelligence**: AniList GraphQL & Jikan REST cross-verification with contradiction detection.
+            - **Sub & Dub Details**: Audio dubbing availability, ADR cast, and streaming platforms.
+            - **Episode Tracker**: Full episode catalog with air dates & countdowns for upcoming unreleased episodes.
+            - **Mail Log In & Cloud Auto-Sync**: Instant vault restore upon login and continuous background auto-backup.
+            - **Pure AMOLED (#000000)**: True black canvas with high-contrast Material 3 design.
+            - **Room DB Offline Cache**: Instant access to your saved watchlist without an active network.
+            
+            *See [RELEASE.md](RELEASE.md) for full changelogs and release notes.*
