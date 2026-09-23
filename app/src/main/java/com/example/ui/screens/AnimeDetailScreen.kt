@@ -90,6 +90,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.ui.components.AmoledAsyncImage
 import com.example.data.model.CharacterCast
 import com.example.data.model.DubInfo
 import com.example.data.model.EpisodeItem
@@ -229,14 +230,12 @@ fun AnimeDetailScreen(
                     ) {
                         // Banner image
                         val backdropUrl = details.bannerImageUrl ?: details.coverImageUrl
-                        if (!backdropUrl.isNullOrBlank()) {
-                            AsyncImage(
-                                model = backdropUrl,
-                                contentDescription = details.title,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
+                        AmoledAsyncImage(
+                            model = backdropUrl,
+                            contentDescription = details.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
 
                         // Gradient fading into AMOLED black
                         Box(
@@ -328,14 +327,12 @@ fun AnimeDetailScreen(
                                     .border(1.5.dp, AmoledBorder, RoundedCornerShape(8.dp))
                                     .background(AmoledSurfaceVariant)
                             ) {
-                                if (!details.coverImageUrl.isNullOrBlank()) {
-                                    AsyncImage(
-                                        model = details.coverImageUrl,
-                                        contentDescription = details.title,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
+                                AmoledAsyncImage(
+                                    model = details.coverImageUrl,
+                                    contentDescription = details.title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
                             }
 
                             Spacer(modifier = Modifier.width(16.dp))
@@ -344,8 +341,22 @@ fun AnimeDetailScreen(
                             Column(
                                 modifier = Modifier.weight(1f)
                             ) {
+                                val displayTitle = when {
+                                    details.title.isNotBlank() && !details.title.equals("null", ignoreCase = true) -> details.title
+                                    !details.englishTitle.isNullOrBlank() && !details.englishTitle.equals("null", ignoreCase = true) -> details.englishTitle
+                                    !details.japaneseTitle.isNullOrBlank() && !details.japaneseTitle.equals("null", ignoreCase = true) -> details.japaneseTitle
+                                    else -> "Anime Details"
+                                }
+
+                                val cleanEnglish = details.englishTitle?.takeIf {
+                                    it.isNotBlank() && !it.equals("null", ignoreCase = true) && !it.equals(displayTitle, ignoreCase = true)
+                                }
+                                val cleanJapanese = details.japaneseTitle?.takeIf {
+                                    it.isNotBlank() && !it.equals("null", ignoreCase = true) && !it.equals(displayTitle, ignoreCase = true)
+                                }
+
                                 Text(
-                                    text = details.title,
+                                    text = displayTitle,
                                     color = TextPrimary,
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Black,
@@ -354,9 +365,9 @@ fun AnimeDetailScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
 
-                                if (!details.englishTitle.isNullOrBlank() && !details.englishTitle.equals(details.title, ignoreCase = true)) {
+                                if (cleanEnglish != null) {
                                     Text(
-                                        text = details.englishTitle,
+                                        text = cleanEnglish,
                                         color = TextSecondary,
                                         fontSize = 13.sp,
                                         maxLines = 1,
@@ -364,9 +375,9 @@ fun AnimeDetailScreen(
                                     )
                                 }
 
-                                if (!details.japaneseTitle.isNullOrBlank()) {
+                                if (cleanJapanese != null) {
                                     Text(
-                                        text = details.japaneseTitle,
+                                        text = cleanJapanese,
                                         color = TextTertiary,
                                         fontSize = 12.sp,
                                         maxLines = 1,
@@ -549,6 +560,51 @@ fun AnimeDetailScreen(
                                         LiveCountdownView(targetEpochSeconds = details.nextEpisode.airingAtEpochSeconds)
                                     }
                                 }
+
+                                if (!details.dubInfo?.upcomingDubDate.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    HorizontalDivider(color = AmoledBorder)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.CalendarMonth,
+                                                contentDescription = null,
+                                                tint = ConflictAmber,
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                            Text(
+                                                text = "Upcoming Dub:",
+                                                color = ConflictAmber,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = details.dubInfo.upcomingDubDate,
+                                                color = TextPrimary,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+
+                                        val licensorSource = details.dubInfo.dubSources.firstOrNull()
+                                        if (licensorSource != null) {
+                                            Text(
+                                                text = licensorSource.name,
+                                                color = TextTertiary,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -562,7 +618,7 @@ fun AnimeDetailScreen(
                             streamingServices = details.streamingServices,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 6.dp)
+                                .padding(horizontal = 20.dp, vertical = 4.dp)
                         )
                     }
                 }
@@ -1564,14 +1620,12 @@ fun TimelineEntryCard(
                     .height(130.dp)
                     .background(AmoledSurfaceVariant)
             ) {
-                if (!entry.coverImageUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = entry.coverImageUrl,
-                        contentDescription = entry.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                AmoledAsyncImage(
+                    model = entry.coverImageUrl,
+                    contentDescription = entry.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
 
                 // Format badge
                 Text(
@@ -1607,115 +1661,327 @@ fun TimelineEntryCard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DubInformationCard(
     dubInfo: DubInfo,
     streamingServices: List<StreamingService>,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = AmoledCard),
-        border = CardDefaults.outlinedCardBorder().copy(
-            brush = Brush.verticalGradient(
-                listOf(
-                    if (dubInfo.isDubAvailable) Color(0xFF00E5FF).copy(alpha = 0.5f) else AmoledBorder,
-                    AmoledBorder
-                )
-            )
-        ),
-        shape = RoundedCornerShape(12.dp),
+    val context = LocalContext.current
+    val isDub = dubInfo.isDubAvailable
+    val isPending = dubInfo.dubStatus.contains("Pending", ignoreCase = true) ||
+            dubInfo.dubStatus.contains("Simuldub", ignoreCase = true) ||
+            dubInfo.dubStatus.contains("Announced", ignoreCase = true)
+
+    val accentColor = when {
+        isDub -> NeonCyan
+        isPending -> ConflictAmber
+        else -> TextTertiary
+    }
+
+    Box(
         modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(AmoledCard)
+            .border(
+                width = 1.dp,
+                color = if (!dubInfo.upcomingDubDate.isNullOrBlank()) ConflictAmber.copy(alpha = 0.4f)
+                        else if (isDub) NeonCyan.copy(alpha = 0.35f) else AmoledBorder,
+                shape = RoundedCornerShape(10.dp)
+            )
+            .padding(horizontal = 14.dp, vertical = 12.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Row 1: Header & Status Pill
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(8.dp)
+                            .size(7.dp)
                             .clip(CircleShape)
-                            .background(if (dubInfo.isDubAvailable) Color(0xFF00E5FF) else ConflictAmber)
+                            .background(accentColor)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "AUDIO & DUB INFORMATION",
-                        color = if (dubInfo.isDubAvailable) Color(0xFF00E5FF) else TextSecondary,
+                        text = "AUDIO & DUB",
+                        color = accentColor,
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 0.5.sp
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.6.sp
                     )
                 }
 
-                val (badgeBg, badgeTextColor) = when {
-                    dubInfo.isDubAvailable -> Pair(Color(0xFF00E5FF).copy(alpha = 0.15f), Color(0xFF00E5FF))
-                    dubInfo.dubStatus.contains("Pending", ignoreCase = true) -> Pair(ConflictAmber.copy(alpha = 0.15f), ConflictAmber)
-                    else -> Pair(AmoledSurfaceVariant, TextTertiary)
-                }
-                Text(
-                    text = dubInfo.dubStatus.uppercase(),
-                    color = badgeTextColor,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
+                // Status pill
+                Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(badgeBg)
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(accentColor.copy(alpha = 0.12f))
+                        .border(0.8.dp, accentColor.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = dubInfo.dubStatus.uppercase(),
+                        color = accentColor,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.4.sp
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Text(
-                text = if (dubInfo.isDubAvailable) "English & Regional Dubs Available" else "Japanese Audio with Subtitles",
-                color = TextPrimary,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            if (!dubInfo.dubScheduleDetails.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = dubInfo.dubScheduleDetails,
-                    color = TextSecondary,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Languages & Licensor row
+            // Row 2: Audio Summary + available languages
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                dubInfo.availableLanguages.forEach { lang ->
-                    Text(
-                        text = lang,
-                        color = TextPrimary,
-                        fontSize = 11.sp,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(AmoledSurfaceVariant)
-                            .border(1.dp, AmoledBorder, RoundedCornerShape(4.dp))
-                            .padding(horizontal = 7.dp, vertical = 3.dp)
-                    )
+                Text(
+                    text = if (isDub) "Japanese (Original) • English Dub" else "Japanese Audio with Subtitles",
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+
+                if (dubInfo.availableLanguages.isNotEmpty()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        dubInfo.availableLanguages.take(4).forEach { lang ->
+                            val shortLang = when (lang.lowercase()) {
+                                "english" -> "EN"
+                                "spanish", "spanish (latin)" -> "ES"
+                                "portuguese", "portuguese (brazil)" -> "PT"
+                                "french" -> "FR"
+                                "german" -> "DE"
+                                "italian" -> "IT"
+                                "japanese" -> "JA"
+                                else -> lang.take(3).uppercase()
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(AmoledSurfaceVariant)
+                                    .border(0.7.dp, AmoledBorder, RoundedCornerShape(3.dp))
+                                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = shortLang,
+                                    color = TextSecondary,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
                 }
-                if (dubInfo.dubLicensor != null) {
-                    Text(
-                        text = "Licensor: ${dubInfo.dubLicensor}",
-                        color = TextTertiary,
-                        fontSize = 11.sp,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(AmoledSurfaceVariant)
-                            .border(1.dp, AmoledBorder, RoundedCornerShape(4.dp))
-                            .padding(horizontal = 7.dp, vertical = 3.dp)
-                    )
+            }
+
+            // Row 3: Dedicated Upcoming Dub Date Banner
+            if (!dubInfo.upcomingDubDate.isNullOrBlank()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(ConflictAmber.copy(alpha = 0.08f))
+                        .border(1.dp, ConflictAmber.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.CalendarMonth,
+                                    contentDescription = "Upcoming Dub Date",
+                                    tint = ConflictAmber,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = "UPCOMING DUB RELEASE",
+                                    color = ConflictAmber,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+
+                            if (dubInfo.upcomingDub?.delayFromSub != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(AmoledBlack.copy(alpha = 0.7f))
+                                        .border(0.7.dp, ConflictAmber.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = dubInfo.upcomingDub.delayFromSub,
+                                        color = TextSecondary,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = dubInfo.upcomingDubDate,
+                                    color = TextPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (dubInfo.upcomingDub?.episodeNumber != null) {
+                                    Text(
+                                        text = "Next Dub: Episode ${dubInfo.upcomingDub.episodeNumber}",
+                                        color = ConflictAmber,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+
+                            val nowSec = System.currentTimeMillis() / 1000L
+                            if (dubInfo.upcomingDubEpochSeconds != null && dubInfo.upcomingDubEpochSeconds > nowSec) {
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = "Dub airs in",
+                                        color = TextTertiary,
+                                        fontSize = 10.sp
+                                    )
+                                    LiveCountdownView(targetEpochSeconds = dubInfo.upcomingDubEpochSeconds)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Row 4: Schedule / Licensor info
+            if (!dubInfo.dubScheduleDetails.isNullOrBlank() || dubInfo.dubLicensor != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (!dubInfo.dubScheduleDetails.isNullOrBlank()) {
+                        Text(
+                            text = dubInfo.dubScheduleDetails,
+                            color = TextTertiary,
+                            fontSize = 11.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                    }
+                    if (dubInfo.dubLicensor != null) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Licensor: ${dubInfo.dubLicensor}",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+
+            // Row 5: Verified Dub Sources with clickable URLs
+            if (dubInfo.dubSources.isNotEmpty()) {
+                HorizontalDivider(color = AmoledBorder.copy(alpha = 0.5f))
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Source,
+                            contentDescription = "Dub Sources",
+                            tint = NeonCyan,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = "VERIFIED DUB SOURCES (${dubInfo.dubSources.size})",
+                            color = NeonCyan,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        dubInfo.dubSources.forEach { source ->
+                            val hasUrl = !source.url.isNullOrBlank()
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(AmoledSurfaceVariant)
+                                    .border(0.8.dp, if (hasUrl) NeonCyan.copy(alpha = 0.3f) else AmoledBorder, RoundedCornerShape(6.dp))
+                                    .clickable(enabled = hasUrl) {
+                                        try {
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(source.url))
+                                            context.startActivity(intent)
+                                        } catch (_: Exception) {}
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 5.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.CheckCircle,
+                                        contentDescription = "Verified",
+                                        tint = VerifiedGreen,
+                                        modifier = Modifier.size(11.dp)
+                                    )
+                                    Text(
+                                        text = source.name,
+                                        color = TextPrimary,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    if (hasUrl) {
+                                        Icon(
+                                            Icons.Default.OpenInNew,
+                                            contentDescription = "Open Source Link",
+                                            tint = TextTertiary,
+                                            modifier = Modifier.size(10.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1824,29 +2090,40 @@ fun EpisodeRowItem(
                 }
 
                 if (episode.hasDub) {
-                    Text(
-                        text = "SUB & DUB",
-                        color = VerifiedGreen,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
+                    Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(VerifiedGreen.copy(alpha = 0.15f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(VerifiedGreen.copy(alpha = 0.12f))
+                            .border(0.7.dp, VerifiedGreen.copy(alpha = 0.4f), RoundedCornerShape(3.dp))
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = "DUB",
+                            color = VerifiedGreen,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.3.sp
+                        )
+                    }
                 } else if (!episode.dubStatusText.isNullOrBlank()) {
                     val isPending = episode.dubStatusText.contains("wk", ignoreCase = true) ||
                             episode.dubStatusText.contains("Following", ignoreCase = true)
-                    Text(
-                        text = episode.dubStatusText,
-                        color = if (isPending) ConflictAmber else TextTertiary,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.SemiBold,
+                    val badgeColor = if (isPending) ConflictAmber else TextTertiary
+                    Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(if (isPending) ConflictAmber.copy(alpha = 0.12f) else AmoledSurfaceVariant)
-                            .padding(horizontal = 5.dp, vertical = 2.dp)
-                    )
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(badgeColor.copy(alpha = 0.1f))
+                            .border(0.7.dp, badgeColor.copy(alpha = 0.35f), RoundedCornerShape(3.dp))
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = episode.dubStatusText,
+                            color = badgeColor,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                    }
                 }
 
                 if (episode.isFiller) {
@@ -1902,6 +2179,64 @@ fun EpisodeRowItem(
                         fontSize = 11.sp
                     )
                 }
+
+                if (!episode.dubReleaseDate.isNullOrBlank()) {
+                    val context = LocalContext.current
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.CalendarMonth,
+                                contentDescription = null,
+                                tint = ConflictAmber,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = "Dub Release: ${episode.dubReleaseDate}",
+                                color = ConflictAmber,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        if (episode.dubSources.isNotEmpty()) {
+                            val source = episode.dubSources.first()
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                modifier = if (!source.url.isNullOrBlank()) {
+                                    Modifier.clickable {
+                                        try {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(source.url)))
+                                        } catch (_: Exception) {}
+                                    }
+                                } else Modifier
+                            ) {
+                                Text(
+                                    text = "Source: ${source.name}",
+                                    color = TextTertiary,
+                                    fontSize = 10.sp,
+                                    maxLines = 1
+                                )
+                                if (!source.url.isNullOrBlank()) {
+                                    Icon(
+                                        Icons.Default.OpenInNew,
+                                        contentDescription = "Source URL",
+                                        tint = TextTertiary,
+                                        modifier = Modifier.size(10.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -1922,14 +2257,12 @@ fun CharacterCastCard(
                 .background(AmoledSurfaceVariant)
                 .border(1.dp, AmoledBorder, RoundedCornerShape(8.dp))
         ) {
-            if (!cast.imageUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = cast.imageUrl,
-                    contentDescription = cast.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            AmoledAsyncImage(
+                model = cast.imageUrl,
+                contentDescription = cast.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
 
             // Role badge
             Text(
@@ -2261,12 +2594,28 @@ fun EpisodePreviewDialog(
 
                 if (episode.hasDub || episode.dubStatusText != null) {
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Audio: ${episode.dubStatusText ?: "English Dub Available"}",
-                        color = VerifiedGreen,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(AmoledSurfaceVariant)
+                            .border(0.8.dp, AmoledBorder, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 7.dp, vertical = 2.5.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(5.dp)
+                                .clip(CircleShape)
+                                .background(if (episode.hasDub) VerifiedGreen else ConflictAmber)
+                        )
+                        Text(
+                            text = "Audio: ${episode.dubStatusText ?: "English Dub Available"}",
+                            color = if (episode.hasDub) VerifiedGreen else TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
 
                 if (!episode.synopsis.isNullOrBlank()) {

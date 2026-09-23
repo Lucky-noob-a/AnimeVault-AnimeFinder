@@ -88,6 +88,12 @@ object JikanApiClient {
         null
     }
 
+    private fun JSONObject.optCleanString(key: String, fallback: String? = null): String? {
+        if (!has(key) || isNull(key)) return fallback
+        val str = optString(key).trim()
+        return if (str.isEmpty() || str.equals("null", ignoreCase = true)) fallback else str
+    }
+
     suspend fun searchAnime(query: String, limit: Int = 20): List<AnimeSummary> = withContext(Dispatchers.IO) {
         val encoded = URLEncoder.encode(query, "UTF-8")
         val url = "$BASE_URL/anime?q=$encoded&limit=$limit&order_by=popularity&sort=asc"
@@ -98,17 +104,23 @@ object JikanApiClient {
         for (i in 0 until data.length()) {
             val item = data.optJSONObject(i) ?: continue
             val malId = item.optInt("mal_id")
-            val title = item.optString("title", "Untitled")
-            val englishTitle = item.optString("title_english", null)
-            val japaneseTitle = item.optString("title_japanese", null)
+            val englishTitle = item.optCleanString("title_english")
+            val defaultTitle = item.optCleanString("title", "Untitled") ?: "Untitled"
+            val japaneseTitle = item.optCleanString("title_japanese")
+            val chosenTitle = when {
+                !englishTitle.isNullOrBlank() -> englishTitle
+                defaultTitle.isNotBlank() -> defaultTitle
+                !japaneseTitle.isNullOrBlank() -> japaneseTitle
+                else -> "Untitled"
+            }
 
             val images = item.optJSONObject("images")?.optJSONObject("webp")
                 ?: item.optJSONObject("images")?.optJSONObject("jpg")
-            val posterUrl = images?.optString("large_image_url") ?: images?.optString("image_url")
+            val posterUrl = images?.optCleanString("large_image_url") ?: images?.optCleanString("image_url")
 
             val score = if (item.has("score") && !item.isNull("score")) item.optDouble("score") else null
-            val status = item.optString("status", "Unknown")
-            val type = item.optString("type", "TV")
+            val status = item.optCleanString("status", "Unknown") ?: "Unknown"
+            val type = item.optCleanString("type", "TV") ?: "TV"
             val episodes = if (item.has("episodes") && !item.isNull("episodes")) item.optInt("episodes") else null
             val year = if (item.has("year") && !item.isNull("year")) item.optInt("year") else null
 
@@ -116,7 +128,30 @@ object JikanApiClient {
             val genres = mutableListOf<String>()
             if (genreArray != null) {
                 for (g in 0 until genreArray.length()) {
-                    genres.add(genreArray.optJSONObject(g)?.optString("name") ?: "")
+                    val gName = genreArray.optJSONObject(g)?.optCleanString("name")
+                    if (!gName.isNullOrBlank()) {
+                        genres.add(gName)
+                    }
+                }
+            }
+
+            val demoArray = item.optJSONArray("demographics")
+            if (demoArray != null) {
+                for (d in 0 until demoArray.length()) {
+                    val dName = demoArray.optJSONObject(d)?.optCleanString("name")
+                    if (!dName.isNullOrBlank() && !genres.any { it.equals(dName, ignoreCase = true) }) {
+                        genres.add(dName)
+                    }
+                }
+            }
+
+            val themeArray = item.optJSONArray("themes")
+            if (themeArray != null) {
+                for (t in 0 until themeArray.length()) {
+                    val tName = themeArray.optJSONObject(t)?.optCleanString("name")
+                    if (!tName.isNullOrBlank() && !genres.any { it.equals(tName, ignoreCase = true) }) {
+                        genres.add(tName)
+                    }
                 }
             }
 
@@ -124,7 +159,7 @@ object JikanApiClient {
                 AnimeSummary(
                     id = malId,
                     malId = malId,
-                    title = englishTitle ?: title,
+                    title = chosenTitle,
                     englishTitle = englishTitle,
                     japaneseTitle = japaneseTitle,
                     coverImageUrl = posterUrl,
@@ -147,16 +182,22 @@ object JikanApiClient {
         val json = executeGetWithRetry(url) ?: return@withContext null
         val data = json.optJSONObject("data") ?: return@withContext null
 
-        val title = data.optString("title", "Untitled")
-        val englishTitle = data.optString("title_english", null)
-        val japaneseTitle = data.optString("title_japanese", null)
-        val synopsis = data.optString("synopsis", null)
-        val type = data.optString("type", "TV")
+        val englishTitle = data.optCleanString("title_english")
+        val defaultTitle = data.optCleanString("title", "Untitled") ?: "Untitled"
+        val japaneseTitle = data.optCleanString("title_japanese")
+        val chosenTitle = when {
+            !englishTitle.isNullOrBlank() -> englishTitle
+            defaultTitle.isNotBlank() -> defaultTitle
+            !japaneseTitle.isNullOrBlank() -> japaneseTitle
+            else -> "Untitled"
+        }
+        val synopsis = data.optCleanString("synopsis")
+        val type = data.optCleanString("type", "TV") ?: "TV"
         val episodes = if (data.has("episodes") && !data.isNull("episodes")) data.optInt("episodes") else null
-        val status = data.optString("status", null)
+        val status = data.optCleanString("status")
 
         val airedObj = data.optJSONObject("aired")
-        val airedString = airedObj?.optString("string", null)
+        val airedString = airedObj?.optCleanString("string")
 
         val duration = data.optString("duration", null)
         val rating = data.optString("rating", null)
@@ -179,7 +220,7 @@ object JikanApiClient {
 
         JikanAnimeDetails(
             malId = malId,
-            title = title,
+            title = chosenTitle,
             englishTitle = englishTitle,
             japaneseTitle = japaneseTitle,
             synopsis = synopsis,

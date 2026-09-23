@@ -7,33 +7,41 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 /**
- * Custom Material 3 ColorScheme that strictly enforces a true black (#000000)
- * background and base surfaces to complement the AMOLED interface design.
+ * Custom Material 3 ColorScheme configured specifically for pure black (#000000)
+ * AMOLED displays with high-contrast accent colors.
  *
- * Setting [surfaceTint] to [Color.Transparent] prevents Material 3 tonal elevation
- * overlays from lightening true black backgrounds into tinted dark grays.
+ * Key Design Principles:
+ * 1. Pure Black Background & Surface (#000000): Pixels are completely powered off
+ *    on OLED/AMOLED screens, maximizing battery conservation and contrast ratio.
+ * 2. High-Contrast Accents: Primary CrimsonAccent (#FF2A5F), Secondary NeonCyan (#00F0FF),
+ *    and Tertiary NeonEmerald (#00FF87) provide razor-sharp clarity against #000000.
+ * 3. Transparent Surface Tint: Setting [surfaceTint] to [Color.Transparent] completely
+ *    disables Material 3 tonal elevation overlays, preventing dark surfaces from
+ *    becoming washed-out gray.
+ * 4. Micro-Tiered Container Hierarchy: Surface containers scale subtly from #000000
+ *    up to #1C1C22 to maintain depth while preserving the deep ink-black aesthetic.
  */
-val AmoledTrueBlackColorScheme: ColorScheme = darkColorScheme(
-    // Primary Accents
+val AmoledColorScheme: ColorScheme = darkColorScheme(
+    // High-Contrast Primary Accents (Crimson Accent)
     primary = CrimsonAccent,
     onPrimary = AmoledBlack,
     primaryContainer = CrimsonDark,
-    onPrimaryContainer = TextPrimary,
+    onPrimaryContainer = Color(0xFFFFD9E2),
     inversePrimary = CrimsonLight,
 
-    // Secondary Accents
-    secondary = CrimsonLight,
+    // High-Contrast Secondary Accents (Neon Cyber Cyan)
+    secondary = NeonCyan,
     onSecondary = AmoledBlack,
-    secondaryContainer = Color(0xFF2E0010),
-    onSecondaryContainer = Color(0xFFFFD9E2),
+    secondaryContainer = Color(0xFF00363D),
+    onSecondaryContainer = Color(0xFF97F0FF),
 
-    // Tertiary Accents
-    tertiary = VerifiedGreen,
+    // High-Contrast Tertiary Accents (Neon Emerald Green)
+    tertiary = NeonEmerald,
     onTertiary = AmoledBlack,
     tertiaryContainer = Color(0xFF003915),
     onTertiaryContainer = Color(0xFF86EFAC),
 
-    // Enforced True Black (#000000) Background & Surfaces
+    // Enforced Pure True Black (#000000) Background & Surfaces
     background = AmoledBlack,
     onBackground = TextPrimary,
     surface = AmoledBlack,
@@ -71,9 +79,15 @@ val AmoledTrueBlackColorScheme: ColorScheme = darkColorScheme(
 )
 
 /**
- * Convenience accessor for the true black AMOLED ColorScheme.
+ * Backward-compatible alias for the AMOLED color scheme.
  */
-fun amoledTrueBlackColorScheme(): ColorScheme = AmoledTrueBlackColorScheme
+val AmoledTrueBlackColorScheme: ColorScheme = AmoledColorScheme
+
+/**
+ * Convenience accessors for the AMOLED ColorScheme.
+ */
+fun amoledColorScheme(): ColorScheme = AmoledColorScheme
+fun amoledTrueBlackColorScheme(): ColorScheme = AmoledColorScheme
 
 @Composable
 fun MyApplicationTheme(
@@ -83,7 +97,7 @@ fun MyApplicationTheme(
 ) {
     // Pure AMOLED aesthetic: always enforce the true black color scheme
     MaterialTheme(
-        colorScheme = AmoledTrueBlackColorScheme,
+        colorScheme = AmoledColorScheme,
         typography = Typography,
         content = content
     )
@@ -99,3 +113,4 @@ fun AnimeVaultAmoledTheme(
         content = content
     )
 }
+

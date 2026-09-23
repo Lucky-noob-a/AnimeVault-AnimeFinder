@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.local.FavoriteAnimeEntity
+import com.example.ui.components.AmoledAsyncImage
 import com.example.ui.theme.AmoledBlack
 import com.example.ui.theme.AmoledBorder
 import com.example.ui.theme.AmoledCard
@@ -225,14 +226,12 @@ fun FavoriteItemCard(
                 .clip(RoundedCornerShape(6.dp))
                 .background(AmoledSurfaceVariant)
         ) {
-            if (!anime.coverImageUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = anime.coverImageUrl,
-                    contentDescription = anime.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            AmoledAsyncImage(
+                model = anime.coverImageUrl,
+                contentDescription = anime.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
         }
 
         Spacer(modifier = Modifier.width(12.dp))

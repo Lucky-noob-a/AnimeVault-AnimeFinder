@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
@@ -66,6 +67,7 @@ import coil.compose.AsyncImage
 import com.example.data.model.AnimeSummary
 import com.example.data.model.SourceSummary
 import com.example.data.model.VerificationStatus
+import com.example.ui.theme.AmoledBlack
 import com.example.ui.theme.AmoledBorder
 import com.example.ui.theme.AmoledCard
 import com.example.ui.theme.AmoledSurface
@@ -177,14 +179,12 @@ fun AnimePosterCard(
                     .height(190.dp)
                     .background(AmoledSurfaceVariant)
             ) {
-                if (!anime.coverImageUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = anime.coverImageUrl,
-                        contentDescription = anime.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                AmoledAsyncImage(
+                    model = anime.coverImageUrl,
+                    contentDescription = anime.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
 
                 // Gradient shadow overlay at bottom of poster
                 Box(
@@ -226,6 +226,37 @@ fun AnimePosterCard(
                     }
                 }
 
+                // Upcoming Dub badge if present
+                if (!anime.upcomingDubDate.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(AmoledBlack.copy(alpha = 0.88f))
+                            .border(0.8.dp, ConflictAmber.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarMonth,
+                                contentDescription = "Upcoming Dub Date",
+                                tint = ConflictAmber,
+                                modifier = Modifier.size(9.dp)
+                            )
+                            Text(
+                                text = "DUB",
+                                color = ConflictAmber,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
                 // Format badge (TV, Movie)
                 Text(
                     text = anime.format,
@@ -241,13 +272,20 @@ fun AnimePosterCard(
                 )
             }
 
+            val cleanTitle = when {
+                anime.title.isNotBlank() && !anime.title.equals("null", ignoreCase = true) -> anime.title
+                !anime.englishTitle.isNullOrBlank() && !anime.englishTitle.equals("null", ignoreCase = true) -> anime.englishTitle
+                !anime.japaneseTitle.isNullOrBlank() && !anime.japaneseTitle.equals("null", ignoreCase = true) -> anime.japaneseTitle
+                else -> "Upcoming Anime"
+            }
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(8.dp)
             ) {
                 Text(
-                    text = anime.title,
+                    text = cleanTitle,
                     color = TextPrimary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -256,6 +294,30 @@ fun AnimePosterCard(
                     lineHeight = 16.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
+
+                if (!anime.upcomingDubDate.isNullOrBlank()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarMonth,
+                            contentDescription = null,
+                            tint = ConflictAmber,
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Text(
+                            text = "Dub: ${anime.upcomingDubDate}",
+                            color = ConflictAmber,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -521,10 +583,9 @@ fun SourceAttributionDialog(
 fun LoadingSkeleton(
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(AmoledBorder.copy(alpha = 0.3f))
+    AmoledShimmerPlaceholder(
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp)
     )
 }
 

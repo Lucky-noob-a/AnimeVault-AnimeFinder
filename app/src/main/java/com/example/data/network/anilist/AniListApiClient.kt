@@ -1,8 +1,10 @@
 package com.example.data.network.anilist
 
 import android.util.Log
+import com.example.data.engine.DubEngine
 import com.example.data.model.AnimeSummary
 import com.example.data.model.CharacterCast
+import com.example.data.model.DubSource
 import com.example.data.model.StudioInfo
 import com.example.data.model.TimelineEntry
 import com.example.data.model.UpcomingEpisodeInfo
@@ -55,7 +57,10 @@ data class AniListMediaDetails(
     val relations: List<TimelineEntry>,
     val characters: List<CharacterCast>,
     val airingSchedule: List<AiringScheduleNode> = emptyList(),
-    val dubLanguages: List<String> = emptyList()
+    val dubLanguages: List<String> = emptyList(),
+    val startDateYear: Int? = null,
+    val startDateMonth: Int? = null,
+    val startDateDay: Int? = null
 )
 
 object AniListApiClient {
@@ -114,6 +119,9 @@ object AniListApiClient {
                   episodes
                   seasonYear
                   genres
+                  tags {
+                    name
+                  }
                 }
               }
             }
@@ -129,27 +137,130 @@ object AniListApiClient {
         parseMediaList(json.optJSONObject("data")?.optJSONObject("Page")?.optJSONArray("media"))
     }
 
+    suspend fun getAnimeByCategory(category: String, page: Int = 1, perPage: Int = 25): List<AnimeSummary> = withContext(Dispatchers.IO) {
+        val trimmed = category.trim()
+        if (trimmed.isBlank() || trimmed.equals("ALL", ignoreCase = true)) return@withContext emptyList()
+
+        val isTag = isKnownTagOrDemographic(trimmed)
+        val query = if (isTag) {
+            """
+                query (${'$'}tag: String, ${'$'}page: Int, ${'$'}perPage: Int) {
+                  Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+                    media(tag: ${'$'}tag, type: ANIME, sort: [POPULARITY_DESC, SCORE_DESC]) {
+                      id
+                      idMal
+                      title {
+                        romaji
+                        english
+                        native
+                      }
+                      coverImage {
+                        large
+                        medium
+                      }
+                      bannerImage
+                      averageScore
+                      status
+                      format
+                      episodes
+                      seasonYear
+                      genres
+                      tags {
+                        name
+                      }
+                    }
+                  }
+                }
+            """.trimIndent()
+        } else {
+            """
+                query (${'$'}genre: String, ${'$'}page: Int, ${'$'}perPage: Int) {
+                  Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+                    media(genre: ${'$'}genre, type: ANIME, sort: [POPULARITY_DESC, SCORE_DESC]) {
+                      id
+                      idMal
+                      title {
+                        romaji
+                        english
+                        native
+                      }
+                      coverImage {
+                        large
+                        medium
+                      }
+                      bannerImage
+                      averageScore
+                      status
+                      format
+                      episodes
+                      seasonYear
+                      genres
+                      tags {
+                        name
+                      }
+                    }
+                  }
+                }
+            """.trimIndent()
+        }
+
+        val variables = JSONObject().apply {
+            if (isTag) {
+                put("tag", trimmed)
+            } else {
+                put("genre", trimmed)
+            }
+            put("page", page)
+            put("perPage", perPage)
+        }
+
+        val json = executeGraphQL(query, variables) ?: return@withContext emptyList()
+        parseMediaList(json.optJSONObject("data")?.optJSONObject("Page")?.optJSONArray("media"))
+    }
+
+    fun isKnownTagOrDemographic(category: String): Boolean {
+        if (com.example.data.model.AnimeCategoryCatalog.isTheme(category) ||
+            com.example.data.model.AnimeCategoryCatalog.isDemographic(category)) {
+            return true
+        }
+        val tags = setOf(
+            "Seinen", "Shounen", "Shoujo", "Josei", "Isekai", "Cyberpunk",
+            "Super Power", "Time Travel", "Survival", "Martial Arts",
+            "School", "Military", "Space", "Historical", "Vampire", "Post-Apocalyptic",
+            "Gore", "Demons", "Magic", "Parody", "Mythology", "Detective", "Music", "Mecha"
+        )
+        return tags.any { it.equals(category, ignoreCase = true) }
+    }
+
     suspend fun getHomeMediaSections(): Map<String, List<AnimeSummary>> = withContext(Dispatchers.IO) {
         val query = """
             query {
               trending: Page(page: 1, perPage: 10) {
                 media(type: ANIME, sort: TRENDING_DESC) {
                   id idMal title { romaji english native } coverImage { large medium } bannerImage averageScore status format episodes seasonYear genres
+                  startDate { year month day }
+                  nextAiringEpisode { episode timeUntilAiring airingAt }
                 }
               }
               airing: Page(page: 1, perPage: 10) {
                 media(type: ANIME, status: RELEASING, sort: POPULARITY_DESC) {
                   id idMal title { romaji english native } coverImage { large medium } bannerImage averageScore status format episodes seasonYear genres
+                  startDate { year month day }
+                  nextAiringEpisode { episode timeUntilAiring airingAt }
                 }
               }
               popular: Page(page: 1, perPage: 10) {
                 media(type: ANIME, sort: POPULARITY_DESC) {
                   id idMal title { romaji english native } coverImage { large medium } bannerImage averageScore status format episodes seasonYear genres
+                  startDate { year month day }
+                  nextAiringEpisode { episode timeUntilAiring airingAt }
                 }
               }
               upcoming: Page(page: 1, perPage: 10) {
                 media(type: ANIME, status: NOT_YET_RELEASED, sort: POPULARITY_DESC) {
                   id idMal title { romaji english native } coverImage { large medium } bannerImage averageScore status format episodes seasonYear genres
+                  startDate { year month day }
+                  nextAiringEpisode { episode timeUntilAiring airingAt }
                 }
               }
             }
@@ -408,24 +519,31 @@ object AniListApiClient {
         parseMediaDetails(media)
     }
 
+    private fun JSONObject.optCleanString(key: String, fallback: String? = null): String? {
+        if (!has(key) || isNull(key)) return fallback
+        val str = optString(key).trim()
+        return if (str.isEmpty() || str.equals("null", ignoreCase = true)) fallback else str
+    }
+
     private fun parseMediaList(array: JSONArray?): List<AnimeSummary> {
         if (array == null) return emptyList()
         val list = mutableListOf<AnimeSummary>()
         for (i in 0 until array.length()) {
             val item = array.optJSONObject(i) ?: continue
             val titleObj = item.optJSONObject("title")
-            val romaji = titleObj?.optString("romaji", "") ?: ""
-            val english = titleObj?.optString("english", null)
-            val native = titleObj?.optString("native", null)
+            val romaji = titleObj?.optCleanString("romaji")
+            val english = titleObj?.optCleanString("english")
+            val native = titleObj?.optCleanString("native")
             val chosenTitle = when {
                 !english.isNullOrBlank() -> english
-                romaji.isNotBlank() -> romaji
-                else -> native ?: "Untitled"
+                !romaji.isNullOrBlank() -> romaji
+                !native.isNullOrBlank() -> native
+                else -> "Upcoming Anime"
             }
 
             val coverObj = item.optJSONObject("coverImage")
-            val coverUrl = coverObj?.optString("large") ?: coverObj?.optString("medium")
-            val bannerUrl = item.optString("bannerImage", null)
+            val coverUrl = coverObj?.optCleanString("large") ?: coverObj?.optCleanString("medium")
+            val bannerUrl = item.optCleanString("bannerImage")
 
             val avgScore = if (item.has("averageScore") && !item.isNull("averageScore")) {
                 item.optDouble("averageScore") / 10.0 // convert 0-100 to 0-10
@@ -435,9 +553,49 @@ object AniListApiClient {
             val genres = mutableListOf<String>()
             if (genreArray != null) {
                 for (g in 0 until genreArray.length()) {
-                    genres.add(genreArray.optString(g))
+                    val gStr = genreArray.optString(g).trim()
+                    if (gStr.isNotEmpty() && !gStr.equals("null", ignoreCase = true)) {
+                        genres.add(gStr)
+                    }
                 }
             }
+
+            val tagsArray = item.optJSONArray("tags")
+            if (tagsArray != null) {
+                for (t in 0 until tagsArray.length()) {
+                    val tObj = tagsArray.optJSONObject(t)
+                    val tagName = tObj?.optCleanString("name") ?: tagsArray.optString(t).trim()
+                    if (!tagName.isNullOrBlank() && !tagName.equals("null", ignoreCase = true)) {
+                        if (!genres.any { it.equals(tagName, ignoreCase = true) }) {
+                            genres.add(tagName)
+                        }
+                    }
+                }
+            }
+
+            val startObj = item.optJSONObject("startDate")
+            val startYear = if (startObj != null && startObj.has("year") && !startObj.isNull("year")) startObj.optInt("year") else null
+            val startMonth = if (startObj != null && startObj.has("month") && !startObj.isNull("month")) startObj.optInt("month") else null
+            val startDay = if (startObj != null && startObj.has("day") && !startObj.isNull("day")) startObj.optInt("day") else null
+
+            val nextAiringObj = item.optJSONObject("nextAiringEpisode")
+            val nextAiringEpoch = if (nextAiringObj != null && nextAiringObj.has("airingAt") && !nextAiringObj.isNull("airingAt")) {
+                nextAiringObj.optLong("airingAt")
+            } else null
+
+            val rawStatus = item.optString("status", "UNKNOWN")
+            val rawFormat = item.optString("format", "TV")
+            val seasonYear = if (item.has("seasonYear") && !item.isNull("seasonYear")) item.optInt("seasonYear") else null
+
+            val (upcomingDubDate, licensor, dubSources) = DubEngine.predictSummaryDub(
+                status = rawStatus,
+                format = rawFormat,
+                seasonYear = seasonYear,
+                nextAiringEpoch = nextAiringEpoch,
+                startDateYear = startYear,
+                startDateMonth = startMonth,
+                startDateDay = startDay
+            )
 
             list.add(
                 AnimeSummary(
@@ -450,12 +608,15 @@ object AniListApiClient {
                     coverImageUrl = coverUrl,
                     bannerImageUrl = bannerUrl,
                     score = avgScore,
-                    status = formatStatus(item.optString("status", "UNKNOWN")),
-                    format = item.optString("format", "TV"),
+                    status = formatStatus(rawStatus),
+                    format = rawFormat,
                     episodes = if (item.has("episodes") && !item.isNull("episodes")) item.optInt("episodes") else null,
-                    seasonYear = if (item.has("seasonYear") && !item.isNull("seasonYear")) item.optInt("seasonYear") else null,
+                    seasonYear = seasonYear,
                     genres = genres,
-                    verificationStatus = VerificationStatus.VERIFIED
+                    verificationStatus = VerificationStatus.VERIFIED,
+                    upcomingDubDate = upcomingDubDate,
+                    dubLicensor = licensor,
+                    dubSources = dubSources
                 )
             )
         }
@@ -464,9 +625,9 @@ object AniListApiClient {
 
     private fun parseMediaDetails(media: JSONObject): AniListMediaDetails {
         val titleObj = media.optJSONObject("title")
-        val romaji = titleObj?.optString("romaji", "") ?: ""
-        val english = titleObj?.optString("english", null)
-        val native = titleObj?.optString("native", null)
+        val romaji = titleObj?.optCleanString("romaji")
+        val english = titleObj?.optCleanString("english")
+        val native = titleObj?.optCleanString("native")
 
         val desc = media.optString("description", "No synopsis available.")
             .replace("<br>", "\n")
@@ -566,11 +727,12 @@ object AniListApiClient {
                 val relType = edge.optString("relationType", "RELATED")
                 val node = edge.optJSONObject("node") ?: continue
                 val relTitleObj = node.optJSONObject("title")
-                val rTitle = relTitleObj?.optString("english")
-                    ?: relTitleObj?.optString("romaji")
+                val rTitle = relTitleObj?.optCleanString("english")
+                    ?: relTitleObj?.optCleanString("romaji")
+                    ?: relTitleObj?.optCleanString("native")
                     ?: "Related Media"
-                val relCover = node.optJSONObject("coverImage")?.optString("large")
-                    ?: node.optJSONObject("coverImage")?.optString("medium")
+                val relCover = node.optJSONObject("coverImage")?.optCleanString("large")
+                    ?: node.optJSONObject("coverImage")?.optCleanString("medium")
 
                 relationsList.add(
                     TimelineEntry(
@@ -677,7 +839,7 @@ object AniListApiClient {
         return AniListMediaDetails(
             id = media.optInt("id"),
             malId = if (media.has("idMal") && !media.isNull("idMal")) media.optInt("idMal") else null,
-            romajiTitle = romaji,
+            romajiTitle = romaji ?: english ?: native ?: "Anime Details",
             englishTitle = english,
             nativeTitle = native,
             description = desc,
@@ -702,7 +864,10 @@ object AniListApiClient {
             relations = relationsList,
             characters = characterList,
             airingSchedule = airingScheduleList,
-            dubLanguages = dubLanguagesSet.toList()
+            dubLanguages = dubLanguagesSet.toList(),
+            startDateYear = if (startObj != null && startObj.has("year") && !startObj.isNull("year")) startObj.optInt("year") else null,
+            startDateMonth = if (startObj != null && startObj.has("month") && !startObj.isNull("month")) startObj.optInt("month") else null,
+            startDateDay = if (startObj != null && startObj.has("day") && !startObj.isNull("day")) startObj.optInt("day") else null
         )
     }
 

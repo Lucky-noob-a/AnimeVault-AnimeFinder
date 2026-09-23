@@ -10,8 +10,11 @@ import com.example.data.backup.BackupMetadata
 import com.example.data.backup.DatabaseStats
 import com.example.data.backup.RestoreSummary
 import com.example.data.local.FavoriteAnimeEntity
+import com.example.data.model.AnimeCategory
+import com.example.data.model.AnimeCategoryCatalog
 import com.example.data.model.AnimeDetails
 import com.example.data.model.AnimeSummary
+import com.example.data.model.CategoryType
 import com.example.data.model.EpisodeItem
 import com.example.data.network.anilist.AniListApiClient
 import com.example.data.network.jikan.JikanApiClient
@@ -32,6 +35,7 @@ data class HomeUiState(
     val airing: List<AnimeSummary> = emptyList(),
     val popular: List<AnimeSummary> = emptyList(),
     val upcoming: List<AnimeSummary> = emptyList(),
+    val upcomingDubs: List<AnimeSummary> = emptyList(),
     val errorMessage: String? = null,
     val isOffline: Boolean = false
 )
@@ -60,12 +64,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         errorMessage = "Couldn't load anime. Check your internet connection."
                     )
                 } else {
+                    val upcomingList = sections["upcoming"] ?: emptyList()
+                    val airingList = sections["airing"] ?: emptyList()
+                    val dubs = sections["upcomingDubs"] ?: (upcomingList.filter { !it.upcomingDubDate.isNullOrBlank() } + airingList.filter { !it.upcomingDubDate.isNullOrBlank() }).distinctBy { it.id }
+
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         trending = sections["trending"] ?: emptyList(),
-                        airing = sections["airing"] ?: emptyList(),
+                        airing = airingList,
                         popular = sections["popular"] ?: emptyList(),
-                        upcoming = sections["upcoming"] ?: emptyList(),
+                        upcoming = upcomingList,
+                        upcomingDubs = dubs,
                         errorMessage = null
                     )
                 }
@@ -79,11 +88,33 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 }
 
+enum class TagFilterTab(val displayName: String) {
+    ALL("All Tags"),
+    GENRES("Genres"),
+    THEMES("Themes"),
+    DEMOGRAPHICS("Demographics")
+}
+
+enum class TagMatchMode(val displayName: String, val description: String) {
+    ANY("Any Tag", "Match any selected tag"),
+    ALL("All Tags", "Match all selected tags")
+}
+
 data class SearchUiState(
     val query: String = "",
     val isLoading: Boolean = false,
     val results: List<AnimeSummary> = emptyList(),
     val selectedFormat: String = "ALL", // ALL, TV, MOVIE, OVA, SPECIAL
+    val selectedGenre: String = "ALL", // ALL or specific genre like Action, Fantasy
+    val selectedGenres: Set<String> = emptySet(),
+    val selectedTags: Set<String> = emptySet(), // Multi-tag filter system (genres and themes)
+    val activeTagTab: TagFilterTab = TagFilterTab.ALL,
+    val tagMatchMode: TagMatchMode = TagMatchMode.ANY,
+    val isTagPickerExpanded: Boolean = false,
+    val tagSearchQuery: String = "",
+    val selectedCategory: String = "ALL", // Active category (e.g. Action, Romance, Seinen)
+    val isCategoryBrowseMode: Boolean = false,
+    val selectedCategoryType: CategoryType = CategoryType.ALL,
     val errorMessage: String? = null,
     val hasSearched: Boolean = false
 )
@@ -104,7 +135,12 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         searchJob?.cancel()
 
         if (newQuery.isBlank()) {
-            _uiState.value = _uiState.value.copy(results = emptyList(), hasSearched = false, isLoading = false)
+            if (_uiState.value.isCategoryBrowseMode && _uiState.value.selectedCategory != "ALL") {
+                // If in category browse mode, restore the category browse results
+                browseCategory(_uiState.value.selectedCategory)
+            } else {
+                _uiState.value = _uiState.value.copy(results = emptyList(), hasSearched = false, isLoading = false)
+            }
             return
         }
 
@@ -118,9 +154,204 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.value = _uiState.value.copy(selectedFormat = format)
     }
 
+    fun onSelectGenre(genre: String) {
+        val current = _uiState.value.selectedGenre
+        val newGenre = if (genre.equals("ALL", ignoreCase = true) || current.equals(genre, ignoreCase = true)) {
+            "ALL"
+        } else {
+            genre
+        }
+        val newSet = if (newGenre == "ALL") emptySet() else setOf(newGenre)
+        _uiState.value = _uiState.value.copy(
+            selectedGenre = newGenre,
+            selectedGenres = newSet,
+            selectedTags = newSet,
+            selectedCategory = newGenre
+        )
+
+        // If user is not searching with text query and selects a category,
+        // trigger direct category browsing!
+        if (newGenre != "ALL" && _uiState.value.query.isBlank()) {
+            browseCategory(newGenre)
+        } else if (newGenre == "ALL" && _uiState.value.isCategoryBrowseMode && _uiState.value.query.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                results = emptyList(),
+                hasSearched = false,
+                isCategoryBrowseMode = false
+            )
+        }
+    }
+
+    fun toggleGenre(genre: String) {
+        onSelectGenre(genre)
+    }
+
+    fun toggleTag(tag: String) {
+        if (tag.equals("ALL", ignoreCase = true)) {
+            clearAllTags()
+            return
+        }
+
+        val currentTags = _uiState.value.selectedTags.toMutableSet()
+        val exists = currentTags.any { it.equals(tag, ignoreCase = true) }
+        if (exists) {
+            currentTags.removeAll { it.equals(tag, ignoreCase = true) }
+        } else {
+            currentTags.add(tag)
+        }
+
+        val primaryTag = currentTags.lastOrNull() ?: "ALL"
+        _uiState.value = _uiState.value.copy(
+            selectedTags = currentTags,
+            selectedGenres = currentTags,
+            selectedGenre = primaryTag,
+            selectedCategory = primaryTag
+        )
+
+        // If user is not searching with text query, trigger category/theme browse
+        if (_uiState.value.query.isBlank()) {
+            if (currentTags.isNotEmpty()) {
+                browseCategory(primaryTag)
+            } else if (_uiState.value.isCategoryBrowseMode) {
+                _uiState.value = _uiState.value.copy(
+                    results = emptyList(),
+                    hasSearched = false,
+                    isCategoryBrowseMode = false
+                )
+            }
+        }
+    }
+
+    fun setTagFilterTab(tab: TagFilterTab) {
+        _uiState.value = _uiState.value.copy(activeTagTab = tab)
+    }
+
+    fun setTagMatchMode(mode: TagMatchMode) {
+        _uiState.value = _uiState.value.copy(tagMatchMode = mode)
+    }
+
+    fun toggleTagMatchMode() {
+        val nextMode = if (_uiState.value.tagMatchMode == TagMatchMode.ANY) TagMatchMode.ALL else TagMatchMode.ANY
+        _uiState.value = _uiState.value.copy(tagMatchMode = nextMode)
+    }
+
+    fun setTagPickerExpanded(expanded: Boolean) {
+        _uiState.value = _uiState.value.copy(isTagPickerExpanded = expanded)
+    }
+
+    fun onTagSearchQueryChanged(query: String) {
+        _uiState.value = _uiState.value.copy(tagSearchQuery = query)
+    }
+
+    fun setTagSearchQuery(query: String) {
+        onTagSearchQueryChanged(query)
+    }
+
+    fun clearAllTags() {
+        val wasCategoryBrowse = _uiState.value.isCategoryBrowseMode && _uiState.value.query.isBlank()
+        _uiState.value = _uiState.value.copy(
+            selectedTags = emptySet(),
+            selectedGenres = emptySet(),
+            selectedGenre = "ALL",
+            selectedCategory = "ALL",
+            isCategoryBrowseMode = false,
+            results = if (wasCategoryBrowse) emptyList() else _uiState.value.results,
+            hasSearched = if (wasCategoryBrowse) false else _uiState.value.hasSearched
+        )
+    }
+
+    fun browseByTag(tag: String) {
+        searchJob?.cancel()
+        val categoryObj = AnimeCategoryCatalog.find(tag)
+        val tagName = categoryObj?.name ?: tag
+
+        _uiState.value = _uiState.value.copy(
+            selectedTags = setOf(tagName),
+            selectedGenres = setOf(tagName),
+            selectedGenre = tagName,
+            selectedCategory = tagName,
+            isCategoryBrowseMode = true,
+            hasSearched = true,
+            isLoading = true,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            try {
+                val categoryResults = repository.getAnimeByCategory(tagName)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    results = categoryResults,
+                    errorMessage = if (categoryResults.isEmpty()) "No titles found for tag '$tagName'." else null
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = "Failed to load $tagName anime. Please check your network."
+                )
+            }
+        }
+    }
+
+    fun onSelectCategoryType(type: CategoryType) {
+        _uiState.value = _uiState.value.copy(selectedCategoryType = type)
+    }
+
+    fun browseCategory(categoryName: String) {
+        searchJob?.cancel()
+        if (categoryName.equals("ALL", ignoreCase = true)) {
+            clearGenreFilter()
+            return
+        }
+
+        val categoryObj = AnimeCategoryCatalog.find(categoryName)
+        val catName = categoryObj?.name ?: categoryName
+
+        _uiState.value = _uiState.value.copy(
+            selectedTags = setOf(catName),
+            selectedGenre = catName,
+            selectedGenres = setOf(catName),
+            selectedCategory = catName,
+            isCategoryBrowseMode = true,
+            hasSearched = true,
+            isLoading = true,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            try {
+                val categoryResults = repository.getAnimeByCategory(catName)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    results = categoryResults,
+                    errorMessage = if (categoryResults.isEmpty()) "No titles found for category '$catName'." else null
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = "Failed to load $catName anime. Please check your network."
+                )
+            }
+        }
+    }
+
+    fun clearGenreFilter() {
+        clearAllTags()
+    }
+
+    fun exploreGenre(genre: String) {
+        browseByTag(genre)
+    }
+
     fun performSearch(queryText: String) {
         if (queryText.isBlank()) return
-        _uiState.value = _uiState.value.copy(query = queryText, isLoading = true, errorMessage = null, hasSearched = true)
+        _uiState.value = _uiState.value.copy(
+            query = queryText,
+            isLoading = true,
+            errorMessage = null,
+            hasSearched = true,
+            isCategoryBrowseMode = false
+        )
 
         viewModelScope.launch {
             try {

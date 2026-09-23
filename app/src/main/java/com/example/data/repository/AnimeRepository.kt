@@ -131,13 +131,61 @@ class AnimeRepository(private val context: Context) {
         }
     }
 
+    private val categoryCache = java.util.concurrent.ConcurrentHashMap<String, List<AnimeSummary>>()
+
+    /**
+     * Fetches top anime for a specific category (e.g., Action, Romance, Seinen)
+     */
+    suspend fun getAnimeByCategory(category: String, forceRefresh: Boolean = false): List<AnimeSummary> = withContext(Dispatchers.IO) {
+        val trimmed = category.trim()
+        if (trimmed.isBlank() || trimmed.equals("ALL", ignoreCase = true)) return@withContext emptyList()
+
+        if (!forceRefresh && categoryCache.containsKey(trimmed)) {
+            val cached = categoryCache[trimmed]
+            if (!cached.isNullOrEmpty()) return@withContext cached
+        }
+
+        try {
+            val results = AniListApiClient.getAnimeByCategory(trimmed, perPage = 25)
+            if (results.isNotEmpty()) {
+                categoryCache[trimmed] = results
+                return@withContext results
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "AniList getAnimeByCategory failed for $trimmed", e)
+        }
+
+        // Fallback: search query for category
+        try {
+            val fallback = searchAnime(trimmed)
+            if (fallback.isNotEmpty()) {
+                categoryCache[trimmed] = fallback
+                return@withContext fallback
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Fallback search failed for category $trimmed", e)
+        }
+
+        emptyList()
+    }
+
     /**
      * Loads Home Screen Sections (Trending, Currently Airing, Popular, Upcoming)
      */
     suspend fun getHomeScreenSections(): Map<String, List<AnimeSummary>> = withContext(Dispatchers.IO) {
         try {
-            val sections = AniListApiClient.getHomeMediaSections()
-            if (sections.isNotEmpty()) return@withContext sections
+            val sections = AniListApiClient.getHomeMediaSections().toMutableMap()
+            if (sections.isNotEmpty()) {
+                val upcoming = sections["upcoming"] ?: emptyList()
+                val airing = sections["airing"] ?: emptyList()
+                val dubsList = (upcoming.filter { !it.upcomingDubDate.isNullOrBlank() } +
+                    airing.filter { !it.upcomingDubDate.isNullOrBlank() })
+                    .distinctBy { it.id }
+                if (dubsList.isNotEmpty()) {
+                    sections["upcomingDubs"] = dubsList
+                }
+                return@withContext sections
+            }
         } catch (e: Exception) {
             Log.e(TAG, "AniList home sections failed, fallback to Jikan", e)
         }
@@ -263,14 +311,18 @@ class AnimeRepository(private val context: Context) {
             )
 
             // Titles
-            val chosenTitle = anilistDetails?.englishTitle
-                ?: jikanDetails?.englishTitle
-                ?: anilistDetails?.romajiTitle
-                ?: jikanDetails?.title
-                ?: "Untitled"
+            val chosenTitle = listOfNotNull(
+                anilistDetails?.englishTitle,
+                jikanDetails?.englishTitle,
+                anilistDetails?.romajiTitle,
+                jikanDetails?.title,
+                anilistDetails?.nativeTitle
+            ).firstOrNull { it.isNotBlank() && !it.equals("null", ignoreCase = true) } ?: "Untitled"
 
-            val englishTitle = anilistDetails?.englishTitle ?: jikanDetails?.englishTitle
-            val japaneseTitle = anilistDetails?.nativeTitle ?: jikanDetails?.japaneseTitle
+            val englishTitle = listOfNotNull(anilistDetails?.englishTitle, jikanDetails?.englishTitle)
+                .firstOrNull { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
+            val japaneseTitle = listOfNotNull(anilistDetails?.nativeTitle, jikanDetails?.japaneseTitle)
+                .firstOrNull { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
 
             // Synopsis: prefer longer, more descriptive one
             val synopsis = when {
@@ -370,7 +422,12 @@ class AnimeRepository(private val context: Context) {
                 status = verifiedStatus.displayText,
                 totalEpisodes = verifiedEpisodes.value,
                 format = format,
-                dubLanguagesFromAniList = anilistDetails?.dubLanguages ?: emptyList()
+                dubLanguagesFromAniList = anilistDetails?.dubLanguages ?: emptyList(),
+                nextEpisode = anilistDetails?.nextEpisode,
+                startDateYear = anilistDetails?.startDateYear,
+                startDateMonth = anilistDetails?.startDateMonth,
+                startDateDay = anilistDetails?.startDateDay,
+                externalLinks = anilistDetails?.externalLinks ?: emptyList()
             )
 
             // Build Complete Episodes List including upcoming ones yet to release

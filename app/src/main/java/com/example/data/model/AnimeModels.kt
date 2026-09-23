@@ -48,7 +48,10 @@ data class AnimeSummary(
     val episodes: Int? = null,
     val seasonYear: Int? = null,
     val genres: List<String> = emptyList(),
-    val verificationStatus: VerificationStatus = VerificationStatus.VERIFIED
+    val verificationStatus: VerificationStatus = VerificationStatus.VERIFIED,
+    val upcomingDubDate: String? = null,
+    val dubLicensor: String? = null,
+    val dubSources: List<DubSource> = emptyList()
 )
 
 data class StudioInfo(
@@ -72,6 +75,23 @@ data class StreamingService(
     val regionNotice: String = "Regional availability may vary"
 )
 
+data class DubSource(
+    val name: String,
+    val url: String? = null,
+    val type: String = "Official Licensor", // "Licensor Schedule", "Global Streaming Platform", "Press Release", "Industry Verification"
+    val verified: Boolean = true
+)
+
+data class UpcomingDubInfo(
+    val episodeNumber: Int? = null,
+    val estimatedReleaseDate: String, // e.g. "Oct 28, 2026" or "Nov 4, 2026 · 15:00 EDT"
+    val releaseDateEpochSeconds: Long? = null,
+    val delayFromSub: String = "~2 weeks following JP broadcast",
+    val statusText: String = "Upcoming Dub", // "Simuldub Ongoing", "Confirmed Premiere", "Announced"
+    val sources: List<DubSource> = emptyList(),
+    val note: String? = null
+)
+
 data class DubInfo(
     val isDubAvailable: Boolean = false,
     val dubStatus: String = "Sub Only", // e.g. "Full Dub Available", "Simuldub Ongoing", "Announced", "Sub Only"
@@ -80,7 +100,11 @@ data class DubInfo(
     val dubLicensor: String? = null, // e.g. "Crunchyroll", "Netflix", "Sentai Filmworks"
     val dubScheduleDetails: String? = null, // e.g. "Simuldubs release ~2 weeks after Japanese broadcast"
     val totalDubbedEpisodes: Int? = null,
-    val leadEnglishCast: List<Pair<String, String>> = emptyList() // Character name -> English VA name
+    val leadEnglishCast: List<Pair<String, String>> = emptyList(), // Character name -> English VA name
+    val upcomingDubDate: String? = null, // e.g. "Oct 28, 2026" or "Nov 2026"
+    val upcomingDubEpochSeconds: Long? = null,
+    val upcomingDub: UpcomingDubInfo? = null,
+    val dubSources: List<DubSource> = emptyList()
 )
 
 data class CharacterCast(
@@ -126,7 +150,9 @@ data class EpisodeItem(
     val airingAtEpochSeconds: Long? = null,
     val timeUntilAiringSeconds: Long? = null,
     val hasDub: Boolean = false,
-    val dubStatusText: String? = null // e.g. "English Dub", "Sub Only", "Dub in ~2 wks", "Upcoming"
+    val dubStatusText: String? = null, // e.g. "English Dub", "Sub Only", "Dub in ~2 wks", "Upcoming"
+    val dubReleaseDate: String? = null, // e.g. "Oct 28, 2026" or "Available Now"
+    val dubSources: List<DubSource> = emptyList()
 )
 
 data class WebUpdate(

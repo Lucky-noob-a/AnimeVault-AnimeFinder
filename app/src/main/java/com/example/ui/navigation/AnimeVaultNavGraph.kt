@@ -82,7 +82,6 @@ fun AnimeVaultApp() {
 
     val bottomNavItems = listOf(
         Screen.Home,
-        Screen.Search,
         Screen.Favorites,
         Screen.Settings
     )

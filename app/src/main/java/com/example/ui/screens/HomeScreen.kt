@@ -22,7 +22,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ElectricBolt
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
@@ -38,6 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -47,15 +53,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.data.model.AnimeSummary
+import com.example.ui.components.AmoledAsyncImage
+import com.example.ui.components.AmoledMetadataLoadingView
 import com.example.ui.components.AnimePosterCard
 import com.example.ui.components.ErrorMessageView
 import com.example.ui.components.LoadingSkeleton
@@ -74,16 +86,85 @@ import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.ui.theme.TextTertiary
 import com.example.ui.viewmodel.HomeViewModel
+import com.example.ui.viewmodel.SearchViewModel
 
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
     onAnimeClick: (Int, Int?) -> Unit,
-    onNavigateToSearch: () -> Unit,
+    onNavigateToSearch: () -> Unit = {},
+    searchViewModel: SearchViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
+    val searchUiState by searchViewModel.uiState.collectAsState()
+
+    val isSearchMode = searchUiState.query.isNotBlank() || searchUiState.hasSearched
+
+    // Dynamic genre options collected from search results
+    val availableGenres = remember(searchUiState.results) {
+        val resultGenres = searchUiState.results
+            .flatMap { it.genres }
+            .filter { it.isNotBlank() }
+            .groupingBy { it }
+            .eachCount()
+            .toList()
+            .sortedByDescending { it.second }
+            .map { it.first }
+
+        val defaultList = listOf(
+            "Action", "Adventure", "Comedy", "Drama", "Fantasy",
+            "Romance", "Sci-Fi", "Mystery", "Supernatural", "Slice of Life",
+            "Sports", "Horror", "Thriller", "Psychological", "Mecha"
+        )
+
+        val combined = (resultGenres + defaultList).distinct()
+        listOf("ALL") + combined
+    }
+
+    // Dynamic genre counts
+    val genreCounts = remember(searchUiState.results, searchUiState.selectedFormat) {
+        val formatFiltered = if (searchUiState.selectedFormat == "ALL") {
+            searchUiState.results
+        } else {
+            searchUiState.results.filter { it.format.equals(searchUiState.selectedFormat, ignoreCase = true) }
+        }
+        val counts = mutableMapOf<String, Int>()
+        counts["ALL"] = formatFiltered.size
+        formatFiltered.forEach { anime ->
+            anime.genres.forEach { genre ->
+                counts[genre] = (counts[genre] ?: 0) + 1
+            }
+        }
+        counts
+    }
+
+    // Filtered search results based on active format & genre chips
+    val filteredSearchResults = remember(
+        searchUiState.results,
+        searchUiState.selectedFormat,
+        searchUiState.selectedGenre,
+        searchUiState.selectedGenres
+    ) {
+        searchUiState.results.filter { anime ->
+            val matchesFormat = searchUiState.selectedFormat == "ALL" ||
+                    anime.format.equals(searchUiState.selectedFormat, ignoreCase = true)
+
+            val matchesGenre = when {
+                searchUiState.selectedGenre == "ALL" && searchUiState.selectedGenres.isEmpty() -> true
+                searchUiState.selectedGenres.isNotEmpty() -> anime.genres.any { g ->
+                    searchUiState.selectedGenres.any { it.equals(g, ignoreCase = true) }
+                }
+                searchUiState.selectedGenre != "ALL" -> anime.genres.any {
+                    it.equals(searchUiState.selectedGenre, ignoreCase = true)
+                }
+                else -> true
+            }
+
+            matchesFormat && matchesGenre
+        }
+    }
 
     Scaffold(
         containerColor = AmoledBlack,
@@ -100,7 +181,7 @@ fun HomeScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -130,7 +211,12 @@ fun HomeScreen(
                     }
 
                     IconButton(
-                        onClick = { viewModel.loadHomeData() },
+                        onClick = {
+                            if (isSearchMode) {
+                                searchViewModel.onQueryChanged("")
+                            }
+                            viewModel.loadHomeData()
+                        },
                         modifier = Modifier
                             .clip(CircleShape)
                             .background(AmoledCard)
@@ -147,84 +233,180 @@ fun HomeScreen(
                 }
             }
 
-            // Search Bar Trigger
+            // Sleek & Thin Search Bar
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 6.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(AmoledCard)
-                        .border(1.dp, AmoledBorder, RoundedCornerShape(12.dp))
-                        .clickable { onNavigateToSearch() }
-                        .padding(horizontal = 16.dp, vertical = 14.dp)
-                        .testTag("home_search_trigger")
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Search",
-                            tint = TextTertiary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "Search anime (e.g. One Piece, Attack on Titan)...",
-                            color = TextTertiary,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
+                SleekThinSearchBar(
+                    query = searchUiState.query,
+                    onQueryChange = { searchViewModel.onQueryChanged(it) },
+                    onSearch = { searchViewModel.performSearch(it) },
+                    onClear = { searchViewModel.onQueryChanged("") },
+                    isLoading = searchUiState.isLoading,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
             }
 
-            if (uiState.isLoading) {
+            if (isSearchMode) {
+                // Genre Filter Chips Bar (allows toggling genres dynamically)
                 item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(20.dp)
-                    ) {
-                        LoadingTrendingSkeleton()
-                        LoadingSectionSkeleton("Currently Airing")
-                    }
-                }
-            } else if (uiState.errorMessage != null && uiState.trending.isEmpty()) {
-                item {
-                    ErrorMessageView(
-                        message = uiState.errorMessage ?: "Failed to load",
-                        onRetry = { viewModel.loadHomeData() }
+                    GenreFilterBar(
+                        genres = availableGenres,
+                        selectedGenre = searchUiState.selectedGenre,
+                        genreCounts = genreCounts,
+                        onSelectGenre = { genre -> searchViewModel.onSelectGenre(genre) },
+                        onClearFilter = { searchViewModel.clearGenreFilter() }
                     )
                 }
-            } else {
-                // Section: Your Favorites (if any)
-                if (favorites.isNotEmpty()) {
-                    item {
-                        HomeSection(
-                            title = "Your Favorites",
-                            icon = Icons.Default.Favorite,
-                            items = favorites.map {
-                                AnimeSummary(
-                                    id = it.id,
-                                    anilistId = it.anilistId,
-                                    malId = it.malId,
-                                    title = it.title,
-                                    englishTitle = it.englishTitle,
-                                    coverImageUrl = it.coverImageUrl,
-                                    bannerImageUrl = it.bannerImageUrl,
-                                    score = it.score,
-                                    status = it.status,
-                                    format = it.format,
-                                    seasonYear = it.year
-                                )
+
+                // Active search summary & Exit action
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (searchUiState.selectedGenre == "ALL") {
+                                "${filteredSearchResults.size} results for \"${searchUiState.query}\""
+                            } else {
+                                "${filteredSearchResults.size} ${searchUiState.selectedGenre} titles for \"${searchUiState.query}\""
                             },
-                            onAnimeClick = onAnimeClick
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
                         )
+
+                        TextButton(
+                            onClick = { searchViewModel.onQueryChanged("") },
+                            modifier = Modifier.testTag("exit_search_button")
+                        ) {
+                            Text(
+                                text = "Exit Search",
+                                color = CrimsonAccent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
+
+                if (searchUiState.isLoading) {
+                    item {
+                        AmoledMetadataLoadingView(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(260.dp)
+                        )
+                    }
+                } else if (filteredSearchResults.isEmpty()) {
+                    item {
+                        if (searchUiState.selectedGenre != "ALL") {
+                            EmptyGenreFilterView(
+                                genre = searchUiState.selectedGenre,
+                                totalCount = genreCounts["ALL"] ?: searchUiState.results.size,
+                                query = searchUiState.query,
+                                onReset = { searchViewModel.clearGenreFilter() }
+                            )
+                        } else {
+                            ErrorMessageView(
+                                message = searchUiState.errorMessage
+                                    ?: "No anime found for '${searchUiState.query}'. Try another title."
+                            )
+                        }
+                    }
+                } else {
+                    items(filteredSearchResults, key = { "search_${it.id}" }) { anime ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 6.dp)
+                        ) {
+                            SearchResultItem(
+                                anime = anime,
+                                onClick = { onAnimeClick(anime.id, anime.malId) }
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Quick genre explore pills when browsing Home
+                item {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp)
+                            .testTag("home_quick_genre_chips")
+                    ) {
+                        val popularHomeGenres = listOf("Action", "Adventure", "Fantasy", "Sci-Fi", "Comedy", "Romance", "Mystery", "Supernatural")
+                        items(popularHomeGenres) { genre ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(AmoledCard)
+                                    .border(1.dp, AmoledBorder, RoundedCornerShape(14.dp))
+                                    .clickable { searchViewModel.exploreGenre(genre) }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = genre,
+                                    color = TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (uiState.isLoading) {
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(20.dp)
+                        ) {
+                            LoadingTrendingSkeleton()
+                            LoadingSectionSkeleton("Currently Airing")
+                        }
+                    }
+                } else if (uiState.errorMessage != null && uiState.trending.isEmpty()) {
+                    item {
+                        ErrorMessageView(
+                            message = uiState.errorMessage ?: "Failed to load",
+                            onRetry = { viewModel.loadHomeData() }
+                        )
+                    }
+                } else {
+                    // Section: Your Favorites (if any)
+                    if (favorites.isNotEmpty()) {
+                        item {
+                            HomeSection(
+                                title = "Your Favorites",
+                                icon = Icons.Default.Favorite,
+                                items = favorites.map {
+                                    AnimeSummary(
+                                        id = it.id,
+                                        anilistId = it.anilistId,
+                                        malId = it.malId,
+                                        title = it.title,
+                                        englishTitle = it.englishTitle,
+                                        coverImageUrl = it.coverImageUrl,
+                                        bannerImageUrl = it.bannerImageUrl,
+                                        score = it.score,
+                                        status = it.status,
+                                        format = it.format,
+                                        seasonYear = it.year
+                                    )
+                                },
+                                onAnimeClick = onAnimeClick
+                            )
+                        }
+                    }
 
                 // Section: Trending Now (Featured AMOLED Widescreen Showcase)
                 if (uiState.trending.isNotEmpty()) {
@@ -243,6 +425,18 @@ fun HomeScreen(
                             title = "Currently Airing",
                             icon = Icons.Default.PlayArrow,
                             items = uiState.airing,
+                            onAnimeClick = onAnimeClick
+                        )
+                    }
+                }
+
+                // Section: Upcoming Dub Schedule
+                if (uiState.upcomingDubs.isNotEmpty()) {
+                    item {
+                        HomeSection(
+                            title = "Upcoming Dub Schedule",
+                            icon = Icons.Default.CalendarMonth,
+                            items = uiState.upcomingDubs,
                             onAnimeClick = onAnimeClick
                         )
                     }
@@ -274,6 +468,7 @@ fun HomeScreen(
             }
         }
     }
+}
 }
 
 @Composable
@@ -445,14 +640,12 @@ fun TrendingThumbnailCard(
                     .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
                     .background(AmoledSurfaceVariant)
             ) {
-                if (!thumbnailImage.isNullOrBlank()) {
-                    AsyncImage(
-                        model = thumbnailImage,
-                        contentDescription = anime.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                AmoledAsyncImage(
+                    model = thumbnailImage,
+                    contentDescription = anime.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
 
                 // Deep AMOLED multi-stop vignette gradient for true-black blending
                 Box(
@@ -556,6 +749,17 @@ fun TrendingThumbnailCard(
                 }
             }
 
+            val cleanTitle = when {
+                anime.title.isNotBlank() && !anime.title.equals("null", ignoreCase = true) -> anime.title
+                !anime.englishTitle.isNullOrBlank() && !anime.englishTitle.equals("null", ignoreCase = true) -> anime.englishTitle
+                !anime.japaneseTitle.isNullOrBlank() && !anime.japaneseTitle.equals("null", ignoreCase = true) -> anime.japaneseTitle
+                else -> "Upcoming Anime"
+            }
+
+            val cleanEnglish = anime.englishTitle?.takeIf {
+                it.isNotBlank() && !it.equals("null", ignoreCase = true) && !it.equals(cleanTitle, ignoreCase = true)
+            }
+
             // Anime Meta Info (Title, status, episodes, genres)
             Column(
                 modifier = Modifier
@@ -563,7 +767,7 @@ fun TrendingThumbnailCard(
                     .padding(horizontal = 12.dp, vertical = 10.dp)
             ) {
                 Text(
-                    text = anime.title,
+                    text = cleanTitle,
                     color = TextPrimary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
@@ -572,9 +776,9 @@ fun TrendingThumbnailCard(
                     lineHeight = 18.sp
                 )
 
-                if (!anime.englishTitle.isNullOrBlank() && anime.englishTitle != anime.title) {
+                if (cleanEnglish != null) {
                     Text(
-                        text = anime.englishTitle,
+                        text = cleanEnglish,
                         color = TextTertiary,
                         fontSize = 11.sp,
                         maxLines = 1,
@@ -738,3 +942,108 @@ fun LoadingSectionSkeleton(title: String) {
         }
     }
 }
+
+/**
+ * Ultra-sleek, thin AMOLED search bar for the top of the Home Screen.
+ * Compact 38dp height, slim capsule shape, crisp 16dp icon, single-line text input,
+ * and quick-clear affordance.
+ */
+@Composable
+fun SleekThinSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSearch: (String) -> Unit,
+    onClear: () -> Unit,
+    isLoading: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(38.dp)
+            .clip(RoundedCornerShape(19.dp))
+            .background(AmoledCard)
+            .border(
+                1.dp,
+                if (query.isNotEmpty()) NeonCyan.copy(alpha = 0.5f) else AmoledBorder,
+                RoundedCornerShape(19.dp)
+            )
+            .padding(horizontal = 14.dp)
+            .testTag("sleek_thin_search_bar"),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "Search",
+                tint = if (query.isNotEmpty()) NeonCyan else TextTertiary,
+                modifier = Modifier.size(16.dp)
+            )
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (query.isEmpty()) {
+                    Text(
+                        text = "Search anime by title, genre...",
+                        color = TextTertiary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    textStyle = TextStyle(
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Normal
+                    ),
+                    cursorBrush = SolidColor(NeonCyan),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { onSearch(query) }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("sleek_search_input")
+                )
+            }
+
+            if (isLoading) {
+                Spacer(modifier = Modifier.width(6.dp))
+                CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    strokeWidth = 1.5.dp,
+                    color = NeonCyan
+                )
+            } else if (query.isNotEmpty()) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .clickable { onClear() }
+                        .testTag("clear_search_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Clear search",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
