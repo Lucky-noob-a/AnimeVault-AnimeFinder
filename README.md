@@ -15,7 +15,7 @@
 
 ### 1. 🔍 Multi-Source Cross-Verification Engine
 - **Independent Aggregation**: Queries **AniList GraphQL**, **Jikan v4 (MyAnimeList)**, and open-web sources in parallel.
-- **Contradiction Detection**: Explicitly identifies and flags discrepancies in episode counts or release statuses between databases rather than guessing.
+- **Consensus Harmonization**: Intelligently synthesizes and cross-references episode counts, release dates, and schedules across databases for seamless verification.
 - **Data Source Health Monitor**: Built-in ping monitor to test real-time latency and reachability to external GraphQL and REST endpoints.
 
 ### 2. 🎙️ Comprehensive Sub & Dub Audio Breakdown

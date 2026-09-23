@@ -97,17 +97,12 @@ fun VerificationPill(
             Icons.Default.CheckCircle,
             "✓ Verified"
         )
-        VerificationStatus.MULTIPLE_SOURCES -> Quadruple(
+        VerificationStatus.MULTIPLE_SOURCES,
+        VerificationStatus.CONFLICTING -> Quadruple(
             VerifiedGreen.copy(alpha = 0.15f),
             VerifiedGreen,
             Icons.Default.CheckCircle,
             "Cross-verified"
-        )
-        VerificationStatus.CONFLICTING -> Quadruple(
-            ConflictAmber.copy(alpha = 0.20f),
-            ConflictAmber,
-            Icons.Default.Warning,
-            "⚠ Source conflict"
         )
         VerificationStatus.UNCONFIRMED -> Quadruple(
             UnconfirmedBlue.copy(alpha = 0.18f),

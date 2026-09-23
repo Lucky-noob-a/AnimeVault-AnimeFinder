@@ -53,6 +53,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.components.AmoledNeonProgressIndicator
+import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.AmoledBlack
 import com.example.ui.theme.AmoledBorder
 import com.example.ui.theme.AmoledCard
@@ -227,7 +229,13 @@ fun SettingsScreen(
                         }
 
                         if (isTesting) {
-                            CircularProgressIndicator(color = CrimsonAccent, modifier = Modifier.size(18.dp))
+                            AmoledNeonProgressIndicator(
+                                size = 18.dp,
+                                strokeWidth = 2.dp,
+                                neonColor = NeonCyan,
+                                showCenterPulse = false,
+                                testTag = "test_sources_neon_spinner"
+                            )
                         } else {
                             OutlinedButton(
                                 onClick = { viewModel.testSources() },

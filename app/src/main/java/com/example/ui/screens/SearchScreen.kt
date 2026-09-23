@@ -43,6 +43,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.example.ui.components.AmoledMetadataLoadingView
+import com.example.ui.components.AmoledNeonProgressIndicator
+import com.example.ui.theme.NeonCyan
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -185,18 +188,13 @@ fun SearchScreen(
 
             // Content Area
             if (uiState.isLoading) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = CrimsonAccent, modifier = Modifier.size(36.dp))
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text("Searching across AniList, Jikan & Web...", color = TextSecondary, fontSize = 13.sp)
-                    }
-                }
+                AmoledMetadataLoadingView(
+                    title = "Searching Anime Databases...",
+                    subtitle = "Cross-referencing AniList, Jikan & Web APIs",
+                    neonColor = NeonCyan,
+                    indicatorSize = 44.dp,
+                    testTag = "search_metadata_loading_view"
+                )
             } else if (uiState.query.isBlank() && !uiState.hasSearched) {
                 // Recent Searches & Popular Suggestions
                 LazyColumn(

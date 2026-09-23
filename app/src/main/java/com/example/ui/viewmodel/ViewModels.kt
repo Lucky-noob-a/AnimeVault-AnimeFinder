@@ -164,7 +164,11 @@ data class DetailsUiState(
     val episodeSearchQuery: String = "",
     val episodeFilter: String = "ALL", // ALL, AIRED, UPCOMING, DUBBED
     val castFilter: String = "ALL", // ALL, JAPANESE, ENGLISH
-    val showSourcesDialog: Boolean = false
+    val showSourcesDialog: Boolean = false,
+    val selectedEpisodeChunkIndex: Int = 0, // 0 for 1-50, 1 for 51-100, etc. -1 for All
+    val isEpisodeSortReversed: Boolean = false, // false = ascending (1..N), true = descending (N..1)
+    val isEpisodeGridView: Boolean = false, // false = detailed rows, true = compact number matrix
+    val showJumpToDialog: Boolean = false
 )
 
 class DetailsViewModel(application: Application) : AndroidViewModel(application) {
@@ -263,6 +267,64 @@ class DetailsViewModel(application: Application) : AndroidViewModel(application)
 
     fun setSourcesDialogVisible(visible: Boolean) {
         _uiState.value = _uiState.value.copy(showSourcesDialog = visible)
+    }
+
+    fun setEpisodeChunkIndex(index: Int) {
+        _uiState.value = _uiState.value.copy(selectedEpisodeChunkIndex = index)
+    }
+
+    fun toggleEpisodeSort() {
+        _uiState.value = _uiState.value.copy(isEpisodeSortReversed = !_uiState.value.isEpisodeSortReversed)
+    }
+
+    fun toggleEpisodeGridView() {
+        _uiState.value = _uiState.value.copy(isEpisodeGridView = !_uiState.value.isEpisodeGridView)
+    }
+
+    fun setShowJumpToDialog(show: Boolean) {
+        _uiState.value = _uiState.value.copy(showJumpToDialog = show)
+    }
+
+    fun jumpToEpisode(episodeNumber: Int, chunkSize: Int = 50) {
+        val targetChunk = if (episodeNumber > 0) ((episodeNumber - 1) / chunkSize) else 0
+        _uiState.value = _uiState.value.copy(
+            selectedEpisodeChunkIndex = targetChunk,
+            showJumpToDialog = false,
+            episodeSearchQuery = ""
+        )
+    }
+
+    fun loadNextFewEpisodePages(malId: Int, pagesToLoad: Int = 3) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingEpisodes = true)
+            var currentP = _uiState.value.currentEpisodePage
+            var hasNext = _uiState.value.hasNextEpisodePage
+            var currentList = _uiState.value.episodes.toMutableList()
+
+            for (i in 1..pagesToLoad) {
+                if (!hasNext) break
+                val nextPage = currentP + 1
+                val result = repository.getEpisodes(malId, nextPage)
+                currentP = result.currentPage
+                hasNext = result.hasNextPage
+
+                val map = currentList.associateBy { it.episodeNumber }.toMutableMap()
+                result.episodes.forEach { ep ->
+                    map[ep.episodeNumber] = ep.copy(
+                        hasDub = map[ep.episodeNumber]?.hasDub ?: ep.hasDub,
+                        dubStatusText = map[ep.episodeNumber]?.dubStatusText ?: ep.dubStatusText
+                    )
+                }
+                currentList = map.values.sortedBy { it.episodeNumber }.toMutableList()
+            }
+
+            _uiState.value = _uiState.value.copy(
+                episodes = currentList,
+                currentEpisodePage = currentP,
+                hasNextEpisodePage = hasNext,
+                isLoadingEpisodes = false
+            )
+        }
     }
 }
 

@@ -32,21 +32,30 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FiberNew
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Source
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -94,6 +103,9 @@ import com.example.ui.components.LiveCountdownView
 import com.example.ui.components.OfflineWarningBanner
 import com.example.ui.components.SourceAttributionDialog
 import com.example.ui.components.VerificationPill
+import com.example.ui.components.AmoledMetadataLoadingView
+import com.example.ui.components.AmoledNeonProgressIndicator
+import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.AmoledBlack
 import com.example.ui.theme.AmoledBorder
 import com.example.ui.theme.AmoledCard
@@ -129,10 +141,27 @@ fun AnimeDetailScreen(
         viewModel.loadAnime(animeId, malId)
     }
 
+    var previewEpisode by remember { mutableStateOf<EpisodeItem?>(null) }
+
     if (uiState.showSourcesDialog && uiState.details != null) {
         SourceAttributionDialog(
             sources = uiState.details!!.sourcesList,
             onDismiss = { viewModel.setSourcesDialogVisible(false) }
+        )
+    }
+
+    if (uiState.showJumpToDialog) {
+        JumpToEpisodeDialog(
+            totalEpisodes = (uiState.details?.episodeCount?.value ?: uiState.episodes.size).coerceAtLeast(1),
+            onDismiss = { viewModel.setShowJumpToDialog(false) },
+            onJump = { epNum -> viewModel.jumpToEpisode(epNum) }
+        )
+    }
+
+    previewEpisode?.let { ep ->
+        EpisodePreviewDialog(
+            episode = ep,
+            onDismiss = { previewEpisode = null }
         )
     }
 
@@ -141,22 +170,14 @@ fun AnimeDetailScreen(
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->
         if (uiState.isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = CrimsonAccent, modifier = Modifier.size(44.dp))
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Cross-checking AniList, Jikan & Open-Web...",
-                        color = TextSecondary,
-                        fontSize = 13.sp
-                    )
-                }
-            }
+            AmoledMetadataLoadingView(
+                title = "Cross-checking Anime Metadata...",
+                subtitle = "Querying AniList GraphQL, Jikan REST & Open-Web",
+                neonColor = NeonCyan,
+                indicatorSize = 52.dp,
+                testTag = "detail_metadata_loading_view",
+                modifier = Modifier.padding(innerPadding)
+            )
         } else if (uiState.errorMessage != null && uiState.details == null) {
             Box(
                 modifier = Modifier
@@ -368,7 +389,7 @@ fun AnimeDetailScreen(
                     }
                 }
 
-                // 3. VERIFICATION BADGE & SOURCE CONFLICT ALERT
+                // 3. VERIFICATION BADGE & DATA SOURCES
                 item {
                     Column(
                         modifier = Modifier
@@ -383,7 +404,6 @@ fun AnimeDetailScreen(
                                 status = details.releaseDate.status,
                                 label = when (details.releaseDate.status) {
                                     VerificationStatus.VERIFIED, VerificationStatus.MULTIPLE_SOURCES -> "✓ Multi-Source Verified"
-                                    VerificationStatus.CONFLICTING -> "⚠ Source Conflict Detected"
                                     else -> "Open-Web Attributed"
                                 },
                                 onClick = { viewModel.setSourcesDialogVisible(true) }
@@ -403,30 +423,6 @@ fun AnimeDetailScreen(
                                 Icon(Icons.Default.Source, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(12.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("Sources (${details.sourcesList.size})", color = TextSecondary, fontSize = 11.sp)
-                            }
-                        }
-
-                        // Conflict details banner if conflict exists
-                        if (details.releaseDate.status == VerificationStatus.CONFLICTING || details.episodeCount.status == VerificationStatus.CONFLICTING) {
-                            val conflictText = details.releaseDate.conflictDetails ?: details.episodeCount.conflictDetails ?: "Discrepancy found across data sources."
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(ConflictAmber.copy(alpha = 0.15f))
-                                    .border(1.dp, ConflictAmber.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                                    .padding(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Warning, contentDescription = null, tint = ConflictAmber, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = conflictText,
-                                    color = TextPrimary,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.weight(1f)
-                                )
                             }
                         }
                     }
@@ -750,8 +746,6 @@ fun AnimeDetailScreen(
                     val upcomingCount = allEpisodes.count { !it.isAired }
                     val dubbedCount = allEpisodes.count { it.hasDub }
 
-                    var showAllEpisodes by remember { mutableStateOf(false) }
-
                     val filteredByChip = when (uiState.episodeFilter) {
                         "AIRED" -> allEpisodes.filter { it.isAired }
                         "UPCOMING" -> allEpisodes.filter { !it.isAired }
@@ -768,17 +762,39 @@ fun AnimeDetailScreen(
                         }
                     }
 
+                    val sortedEpisodes = if (uiState.isEpisodeSortReversed) {
+                        filteredEpisodes.sortedByDescending { it.episodeNumber }
+                    } else {
+                        filteredEpisodes.sortedBy { it.episodeNumber }
+                    }
+
+                    // Chunking for long series (batches of 50 episodes)
+                    val chunkSize = 50
+                    val totalEpisodesCount = sortedEpisodes.size
+                    val chunkCount = if (totalEpisodesCount > 0) ((totalEpisodesCount - 1) / chunkSize) + 1 else 0
+                    val isChunkingActive = totalEpisodesCount > 25
+                    val activeChunkIndex = uiState.selectedEpisodeChunkIndex.coerceIn(0, (chunkCount - 1).coerceAtLeast(0))
+
+                    val displayedEpisodes = if (!isChunkingActive || uiState.selectedEpisodeChunkIndex == -1 || chunkCount <= 1) {
+                        sortedEpisodes
+                    } else {
+                        val start = activeChunkIndex * chunkSize
+                        val end = (start + chunkSize).coerceAtMost(totalEpisodesCount)
+                        if (start < totalEpisodesCount) sortedEpisodes.subList(start, end) else sortedEpisodes
+                    }
+
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 20.dp, vertical = 10.dp)
                     ) {
+                        // Header with Title & Quick Controls
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = "All Episodes Guide",
                                     color = TextPrimary,
@@ -793,84 +809,161 @@ fun AnimeDetailScreen(
                                     )
                                 }
                             }
-                            if (details.dubInfo?.isDubAvailable == true) {
-                                Text(
-                                    text = "DUBBED ($dubbedCount)",
-                                    color = VerifiedGreen,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
+
+                            // Quick Action Tools: Jump to # and Grid/List toggle
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                // Jump to Episode button
+                                Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(VerifiedGreen.copy(alpha = 0.15f))
-                                        .padding(horizontal = 6.dp, vertical = 3.dp)
-                                )
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(NeonCyan.copy(alpha = 0.15f))
+                                        .border(1.dp, NeonCyan.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                        .clickable { viewModel.setShowJumpToDialog(true) }
+                                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                                        .testTag("jump_to_episode_button"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.NearMe,
+                                            contentDescription = "Jump to Episode",
+                                            tint = NeonCyan,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "Jump",
+                                            color = NeonCyan,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+                                // Grid / List View Toggle
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (uiState.isEpisodeGridView) CrimsonAccent.copy(alpha = 0.2f) else AmoledCard)
+                                        .border(1.dp, if (uiState.isEpisodeGridView) CrimsonAccent else AmoledBorder, RoundedCornerShape(6.dp))
+                                        .clickable { viewModel.toggleEpisodeGridView() }
+                                        .padding(6.dp)
+                                        .testTag("toggle_episode_view_mode"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (uiState.isEpisodeGridView) Icons.Default.ViewList else Icons.Default.GridView,
+                                        contentDescription = if (uiState.isEpisodeGridView) "Detailed List View" else "Compact Grid Matrix",
+                                        tint = if (uiState.isEpisodeGridView) CrimsonAccent else TextSecondary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        // Filter chips: All, Aired, Upcoming, Dubbed
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
+                        // Filter chips row + Sort order button
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            item {
-                                Text(
-                                    text = "All (${allEpisodes.size})",
-                                    color = if (uiState.episodeFilter == "ALL") TextPrimary else TextTertiary,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (uiState.episodeFilter == "ALL") FontWeight.Bold else FontWeight.Normal,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(if (uiState.episodeFilter == "ALL") CrimsonAccent.copy(alpha = 0.2f) else AmoledCard)
-                                        .border(1.dp, if (uiState.episodeFilter == "ALL") CrimsonAccent else AmoledBorder, RoundedCornerShape(6.dp))
-                                        .clickable { viewModel.onEpisodeFilterChanged("ALL") }
-                                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                                )
-                            }
-                            item {
-                                Text(
-                                    text = "Aired ($airedCount)",
-                                    color = if (uiState.episodeFilter == "AIRED") TextPrimary else TextTertiary,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (uiState.episodeFilter == "AIRED") FontWeight.Bold else FontWeight.Normal,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(if (uiState.episodeFilter == "AIRED") CrimsonAccent.copy(alpha = 0.2f) else AmoledCard)
-                                        .border(1.dp, if (uiState.episodeFilter == "AIRED") CrimsonAccent else AmoledBorder, RoundedCornerShape(6.dp))
-                                        .clickable { viewModel.onEpisodeFilterChanged("AIRED") }
-                                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                                )
-                            }
-                            if (upcomingCount > 0) {
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
                                 item {
                                     Text(
-                                        text = "Upcoming ($upcomingCount)",
-                                        color = if (uiState.episodeFilter == "UPCOMING") Color(0xFF00E5FF) else TextTertiary,
+                                        text = "All (${allEpisodes.size})",
+                                        color = if (uiState.episodeFilter == "ALL") TextPrimary else TextTertiary,
                                         fontSize = 12.sp,
-                                        fontWeight = if (uiState.episodeFilter == "UPCOMING") FontWeight.Bold else FontWeight.Normal,
+                                        fontWeight = if (uiState.episodeFilter == "ALL") FontWeight.Bold else FontWeight.Normal,
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(6.dp))
-                                            .background(if (uiState.episodeFilter == "UPCOMING") Color(0xFF00E5FF).copy(alpha = 0.2f) else AmoledCard)
-                                            .border(1.dp, if (uiState.episodeFilter == "UPCOMING") Color(0xFF00E5FF) else AmoledBorder, RoundedCornerShape(6.dp))
-                                            .clickable { viewModel.onEpisodeFilterChanged("UPCOMING") }
+                                            .background(if (uiState.episodeFilter == "ALL") CrimsonAccent.copy(alpha = 0.2f) else AmoledCard)
+                                            .border(1.dp, if (uiState.episodeFilter == "ALL") CrimsonAccent else AmoledBorder, RoundedCornerShape(6.dp))
+                                            .clickable { viewModel.onEpisodeFilterChanged("ALL") }
                                             .padding(horizontal = 10.dp, vertical = 6.dp)
                                     )
                                 }
-                            }
-                            if (dubbedCount > 0 || details.dubInfo?.isDubAvailable == true) {
                                 item {
                                     Text(
-                                        text = "Dubbed ($dubbedCount)",
-                                        color = if (uiState.episodeFilter == "DUBBED") VerifiedGreen else TextTertiary,
+                                        text = "Aired ($airedCount)",
+                                        color = if (uiState.episodeFilter == "AIRED") TextPrimary else TextTertiary,
                                         fontSize = 12.sp,
-                                        fontWeight = if (uiState.episodeFilter == "DUBBED") FontWeight.Bold else FontWeight.Normal,
+                                        fontWeight = if (uiState.episodeFilter == "AIRED") FontWeight.Bold else FontWeight.Normal,
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(6.dp))
-                                            .background(if (uiState.episodeFilter == "DUBBED") VerifiedGreen.copy(alpha = 0.2f) else AmoledCard)
-                                            .border(1.dp, if (uiState.episodeFilter == "DUBBED") VerifiedGreen else AmoledBorder, RoundedCornerShape(6.dp))
-                                            .clickable { viewModel.onEpisodeFilterChanged("DUBBED") }
+                                            .background(if (uiState.episodeFilter == "AIRED") CrimsonAccent.copy(alpha = 0.2f) else AmoledCard)
+                                            .border(1.dp, if (uiState.episodeFilter == "AIRED") CrimsonAccent else AmoledBorder, RoundedCornerShape(6.dp))
+                                            .clickable { viewModel.onEpisodeFilterChanged("AIRED") }
                                             .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+                                if (upcomingCount > 0) {
+                                    item {
+                                        Text(
+                                            text = "Upcoming ($upcomingCount)",
+                                            color = if (uiState.episodeFilter == "UPCOMING") Color(0xFF00E5FF) else TextTertiary,
+                                            fontSize = 12.sp,
+                                            fontWeight = if (uiState.episodeFilter == "UPCOMING") FontWeight.Bold else FontWeight.Normal,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(if (uiState.episodeFilter == "UPCOMING") Color(0xFF00E5FF).copy(alpha = 0.2f) else AmoledCard)
+                                                .border(1.dp, if (uiState.episodeFilter == "UPCOMING") Color(0xFF00E5FF) else AmoledBorder, RoundedCornerShape(6.dp))
+                                                .clickable { viewModel.onEpisodeFilterChanged("UPCOMING") }
+                                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                                if (dubbedCount > 0 || details.dubInfo?.isDubAvailable == true) {
+                                    item {
+                                        Text(
+                                            text = "Dubbed ($dubbedCount)",
+                                            color = if (uiState.episodeFilter == "DUBBED") VerifiedGreen else TextTertiary,
+                                            fontSize = 12.sp,
+                                            fontWeight = if (uiState.episodeFilter == "DUBBED") FontWeight.Bold else FontWeight.Normal,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(if (uiState.episodeFilter == "DUBBED") VerifiedGreen.copy(alpha = 0.2f) else AmoledCard)
+                                                .border(1.dp, if (uiState.episodeFilter == "DUBBED") VerifiedGreen else AmoledBorder, RoundedCornerShape(6.dp))
+                                                .clickable { viewModel.onEpisodeFilterChanged("DUBBED") }
+                                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            // Sort order toggle: 1➔N or N➔1
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(AmoledCard)
+                                    .border(1.dp, AmoledBorder, RoundedCornerShape(6.dp))
+                                    .clickable { viewModel.toggleEpisodeSort() }
+                                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                                    .testTag("toggle_episode_sort_order"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.SwapVert,
+                                        contentDescription = "Sort Episodes",
+                                        tint = if (uiState.isEpisodeSortReversed) NeonCyan else TextSecondary,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = if (uiState.isEpisodeSortReversed) "Latest First" else "Oldest First",
+                                        color = if (uiState.isEpisodeSortReversed) NeonCyan else TextPrimary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold
                                     )
                                 }
                             }
@@ -878,13 +971,23 @@ fun AnimeDetailScreen(
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        // Episode search / filter
+                        // Episode search / filter with instant clear
                         OutlinedTextField(
                             value = uiState.episodeSearchQuery,
                             onValueChange = { viewModel.onEpisodeSearch(it) },
-                            placeholder = { Text("Filter episodes by title or #...", color = TextTertiary, fontSize = 12.sp) },
+                            placeholder = { Text("Search episode by title, # or keyword...", color = TextTertiary, fontSize = 12.sp) },
                             singleLine = true,
                             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextTertiary, modifier = Modifier.size(16.dp)) },
+                            trailingIcon = {
+                                if (uiState.episodeSearchQuery.isNotBlank()) {
+                                    IconButton(
+                                        onClick = { viewModel.onEpisodeSearch("") },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(Icons.Default.Close, contentDescription = "Clear search", tint = TextSecondary, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            },
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedContainerColor = AmoledCard,
                                 unfocusedContainerColor = AmoledCard,
@@ -894,12 +997,142 @@ fun AnimeDetailScreen(
                                 unfocusedTextColor = TextPrimary
                             ),
                             shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth().testTag("episode_search_field")
                         )
+
+                        // Chunk / Batch selector bar when series has many episodes
+                        if (isChunkingActive && chunkCount > 1) {
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(AmoledCard.copy(alpha = 0.5f))
+                                    .border(1.dp, AmoledBorder, RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 6.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Previous Batch Arrow
+                                IconButton(
+                                    onClick = {
+                                        if (activeChunkIndex > 0 && uiState.selectedEpisodeChunkIndex != -1) {
+                                            viewModel.setEpisodeChunkIndex(activeChunkIndex - 1)
+                                        }
+                                    },
+                                    enabled = activeChunkIndex > 0 && uiState.selectedEpisodeChunkIndex != -1,
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.KeyboardArrowLeft,
+                                        contentDescription = "Previous Batch",
+                                        tint = if (activeChunkIndex > 0 && uiState.selectedEpisodeChunkIndex != -1) NeonCyan else TextTertiary.copy(alpha = 0.4f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+
+                                // Batch Range Chips
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    items(chunkCount) { idx ->
+                                        val startEp = idx * chunkSize + 1
+                                        val endEp = minOf((idx + 1) * chunkSize, totalEpisodesCount)
+                                        val isSelected = uiState.selectedEpisodeChunkIndex == idx
+
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(
+                                                    if (isSelected) NeonCyan.copy(alpha = 0.2f)
+                                                    else AmoledBlack
+                                                )
+                                                .border(
+                                                    1.dp,
+                                                    if (isSelected) NeonCyan else AmoledBorder,
+                                                    RoundedCornerShape(6.dp)
+                                                )
+                                                .clickable { viewModel.setEpisodeChunkIndex(idx) }
+                                                .padding(horizontal = 9.dp, vertical = 5.dp)
+                                                .testTag("episode_chunk_chip_$idx"),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "$startEp–$endEp",
+                                                color = if (isSelected) NeonCyan else TextSecondary,
+                                                fontSize = 11.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        }
+                                    }
+
+                                    // "All" Chip
+                                    item {
+                                        val isAllSelected = uiState.selectedEpisodeChunkIndex == -1
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(
+                                                    if (isAllSelected) CrimsonAccent.copy(alpha = 0.2f)
+                                                    else AmoledBlack
+                                                )
+                                                .border(
+                                                    1.dp,
+                                                    if (isAllSelected) CrimsonAccent else AmoledBorder,
+                                                    RoundedCornerShape(6.dp)
+                                                )
+                                                .clickable { viewModel.setEpisodeChunkIndex(-1) }
+                                                .padding(horizontal = 9.dp, vertical = 5.dp)
+                                                .testTag("episode_chunk_all_chip"),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "All ($totalEpisodesCount)",
+                                                color = if (isAllSelected) TextPrimary else TextSecondary,
+                                                fontSize = 11.sp,
+                                                fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Next Batch Arrow
+                                IconButton(
+                                    onClick = {
+                                        if (activeChunkIndex < chunkCount - 1 && uiState.selectedEpisodeChunkIndex != -1) {
+                                            viewModel.setEpisodeChunkIndex(activeChunkIndex + 1)
+                                        }
+                                    },
+                                    enabled = activeChunkIndex < chunkCount - 1 && uiState.selectedEpisodeChunkIndex != -1,
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.KeyboardArrowRight,
+                                        contentDescription = "Next Batch",
+                                        tint = if (activeChunkIndex < chunkCount - 1 && uiState.selectedEpisodeChunkIndex != -1) NeonCyan else TextTertiary.copy(alpha = 0.4f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
+                            // Range indicator status text
+                            if (uiState.selectedEpisodeChunkIndex != -1) {
+                                val currentRangeStart = activeChunkIndex * chunkSize + 1
+                                val currentRangeEnd = minOf((activeChunkIndex + 1) * chunkSize, totalEpisodesCount)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Showing episodes $currentRangeStart–$currentRangeEnd of $totalEpisodesCount (Batch ${activeChunkIndex + 1} of $chunkCount)",
+                                    color = TextTertiary,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                )
+                            }
+                        }
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        if (filteredEpisodes.isEmpty()) {
+                        if (sortedEpisodes.isEmpty()) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -907,7 +1140,12 @@ fun AnimeDetailScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (uiState.isLoadingEpisodes) {
-                                    CircularProgressIndicator(color = CrimsonAccent, modifier = Modifier.size(24.dp))
+                                    AmoledNeonProgressIndicator(
+                                        size = 24.dp,
+                                        strokeWidth = 2.5.dp,
+                                        neonColor = NeonCyan,
+                                        testTag = "detail_episodes_neon_spinner"
+                                    )
                                 } else {
                                     Text(
                                         text = if (details.malId == null && allEpisodes.isEmpty()) "Detailed episode list unavailable for this entry." else "No episodes match filter.",
@@ -917,49 +1155,132 @@ fun AnimeDetailScreen(
                                 }
                             }
                         } else {
-                            val displayLimit = if (showAllEpisodes || filteredEpisodes.size <= 30) filteredEpisodes.size else 30
-
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                filteredEpisodes.take(displayLimit).forEach { ep ->
-                                    EpisodeRowItem(episode = ep)
-                                }
-                            }
-
-                            if (filteredEpisodes.size > 30) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(
-                                    onClick = { showAllEpisodes = !showAllEpisodes },
-                                    colors = ButtonDefaults.buttonColors(containerColor = AmoledCard),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, AmoledBorder),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.fillMaxWidth()
+                            if (uiState.isEpisodeGridView) {
+                                // Compact Episode Matrix / Grid View
+                                FlowRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Text(
-                                        text = if (showAllEpisodes) "Show Less" else "Show All ${filteredEpisodes.size} Episodes (Including Upcoming)",
-                                        color = TextPrimary,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
-
-                            if (uiState.hasNextEpisodePage) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(
-                                    onClick = {
-                                        details.malId?.let {
-                                            viewModel.loadEpisodes(it, uiState.currentEpisodePage + 1)
+                                    displayedEpisodes.forEach { ep ->
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(
+                                                    if (!ep.isAired) Color(0xFF00E5FF).copy(alpha = 0.15f)
+                                                    else AmoledCard
+                                                )
+                                                .border(
+                                                    1.dp,
+                                                    if (!ep.isAired) Color(0xFF00E5FF).copy(alpha = 0.4f)
+                                                    else AmoledBorder,
+                                                    RoundedCornerShape(6.dp)
+                                                )
+                                                .clickable { previewEpisode = ep }
+                                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                                                .testTag("matrix_ep_${ep.episodeNumber}"),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "EP ${ep.episodeNumber}",
+                                                    color = if (!ep.isAired) Color(0xFF00E5FF) else TextPrimary,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                                if (ep.hasDub) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(5.dp)
+                                                            .clip(CircleShape)
+                                                            .background(VerifiedGreen)
+                                                    )
+                                                }
+                                                if (ep.isFiller) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(5.dp)
+                                                            .clip(CircleShape)
+                                                            .background(ConflictAmber)
+                                                    )
+                                                }
+                                            }
                                         }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = AmoledCard),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, AmoledBorder),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.fillMaxWidth()
+                                    }
+                                }
+                            } else {
+                                // Detailed Episode List Rows
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    displayedEpisodes.forEach { ep ->
+                                        EpisodeRowItem(episode = ep)
+                                    }
+                                }
+                            }
+
+                            // Load More / Background Fetch for Paginated Long Series
+                            if (uiState.hasNextEpisodePage) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    if (uiState.isLoadingEpisodes) {
-                                        CircularProgressIndicator(color = CrimsonAccent, modifier = Modifier.size(16.dp))
-                                    } else {
-                                        Text("Load More Broadcast History (Page ${uiState.currentEpisodePage + 1})", color = TextPrimary, fontSize = 12.sp)
+                                    Button(
+                                        onClick = {
+                                            details.malId?.let {
+                                                viewModel.loadEpisodes(it, uiState.currentEpisodePage + 1)
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = AmoledCard),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, AmoledBorder),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1f).testTag("load_more_episodes_single_page")
+                                    ) {
+                                        if (uiState.isLoadingEpisodes) {
+                                            AmoledNeonProgressIndicator(
+                                                size = 14.dp,
+                                                strokeWidth = 2.dp,
+                                                neonColor = NeonCyan,
+                                                showCenterPulse = false,
+                                                testTag = "detail_load_more_neon_spinner"
+                                            )
+                                        } else {
+                                            Text(
+                                                text = "Page ${uiState.currentEpisodePage + 1}",
+                                                color = TextPrimary,
+                                                fontSize = 11.sp
+                                            )
+                                        }
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            details.malId?.let {
+                                                viewModel.loadNextFewEpisodePages(it, 3)
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan.copy(alpha = 0.15f)),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.4f)),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1.5f).testTag("load_next_300_episodes_button")
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                Icons.Default.Bolt,
+                                                contentDescription = null,
+                                                tint = NeonCyan,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "⚡ Fetch Next 300 Eps",
+                                                color = NeonCyan,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1730,4 +2051,245 @@ fun WebUpdateCard(
             overflow = TextOverflow.Ellipsis
         )
     }
+}
+
+@Composable
+fun JumpToEpisodeDialog(
+    totalEpisodes: Int,
+    onDismiss: () -> Unit,
+    onJump: (Int) -> Unit
+) {
+    var textValue by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = AmoledCard,
+        shape = RoundedCornerShape(14.dp),
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.NearMe,
+                    contentDescription = null,
+                    tint = NeonCyan,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Jump to Episode",
+                    color = TextPrimary,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        text = {
+            Column {
+                Text(
+                    text = "Quick navigation for long anime series (Episodes 1 to $totalEpisodes):",
+                    color = TextSecondary,
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = textValue,
+                    onValueChange = { input ->
+                        textValue = input.filter { it.isDigit() }
+                        errorMessage = null
+                    },
+                    label = { Text("Episode Number", color = TextTertiary, fontSize = 12.sp) },
+                    placeholder = { Text("e.g. 50", color = TextTertiary) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = AmoledBlack,
+                        unfocusedContainerColor = AmoledBlack,
+                        focusedBorderColor = NeonCyan,
+                        unfocusedBorderColor = AmoledBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("jump_to_ep_input")
+                )
+                if (errorMessage != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = errorMessage!!, color = CrimsonAccent, fontSize = 11.sp)
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                Text("Quick Jumps:", color = TextTertiary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val presets = listOf(
+                        "Ep 1" to 1,
+                        "Mid (${totalEpisodes / 2})" to (totalEpisodes / 2).coerceAtLeast(1),
+                        "Latest ($totalEpisodes)" to totalEpisodes
+                    )
+                    presets.forEach { (label, epNum) ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(AmoledBlack)
+                                .border(1.dp, AmoledBorder, RoundedCornerShape(6.dp))
+                                .clickable { onJump(epNum) }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = label, color = NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val epNum = textValue.toIntOrNull()
+                    if (epNum != null && epNum > 0) {
+                        onJump(epNum)
+                    } else {
+                        errorMessage = "Please enter an episode between 1 and $totalEpisodes."
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.testTag("jump_to_ep_confirm_button")
+            ) {
+                Text("Jump", color = AmoledBlack, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextTertiary)
+            }
+        }
+    )
+}
+
+@Composable
+fun EpisodePreviewDialog(
+    episode: EpisodeItem,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = AmoledCard,
+        shape = RoundedCornerShape(14.dp),
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(
+                                if (!episode.isAired) Color(0xFF00E5FF).copy(alpha = 0.2f)
+                                else CrimsonAccent.copy(alpha = 0.2f)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "EP ${episode.episodeNumber}",
+                            color = if (!episode.isAired) Color(0xFF00E5FF) else CrimsonAccent,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    if (episode.isFiller) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "FILLER",
+                            color = ConflictAmber,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(ConflictAmber.copy(alpha = 0.15f))
+                                .padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = TextTertiary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        },
+        text = {
+            Column {
+                Text(
+                    text = episode.title,
+                    color = TextPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (!episode.airDate.isNullOrBlank()) {
+                        Text(
+                            text = if (!episode.isAired) "Airs: ${episode.airDate}" else "Aired: ${episode.airDate}",
+                            color = if (!episode.isAired) Color(0xFF00E5FF) else TextSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                    if (episode.durationMinutes != null) {
+                        Text(
+                            text = "• ${episode.durationMinutes} min",
+                            color = TextTertiary,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                if (episode.hasDub || episode.dubStatusText != null) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Audio: ${episode.dubStatusText ?: "English Dub Available"}",
+                        color = VerifiedGreen,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                if (!episode.synopsis.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = episode.synopsis,
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                        maxLines = 8,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = AmoledBorder),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Close", color = TextPrimary)
+            }
+        }
+    )
 }

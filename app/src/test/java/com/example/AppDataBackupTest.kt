@@ -63,7 +63,7 @@ class AppDataBackupTest {
         dao.addFavorite(testFav)
         dao.insertSearchQuery(SearchHistoryEntity(query = "Attack on Titan"))
 
-        val email = "agrawallucky31@gmail.com"
+        val email = "testuser@example.com"
         val loginResult = backupManager.loginWithEmail(email)
         assertTrue("Login should succeed", loginResult.isSuccess)
         val result = loginResult.getOrNull()
@@ -83,7 +83,7 @@ class AppDataBackupTest {
     @Test
     fun testMailLoginAutomaticRestoreOnLogin() = runBlocking {
         val dao = database.animeDao()
-        val email = "agrawallucky31@gmail.com"
+        val email = "testuser@example.com"
 
         // 1. Log in initially and save a favorite
         backupManager.loginWithEmail(email)
@@ -133,7 +133,7 @@ class AppDataBackupTest {
 
     @Test
     fun testManualSyncNow() = runBlocking {
-        val email = "agrawallucky31@gmail.com"
+        val email = "testuser@example.com"
         backupManager.loginWithEmail(email)
 
         val syncResult = backupManager.syncNow()
